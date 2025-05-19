@@ -433,4 +433,59 @@ class APIService {
             throw error
         }
     }
+    
+    // 이미 지원한 공고인지 확인하는 메서드
+    func checkIfAlreadyApplied(jobId: Int) async throws -> Bool {
+        guard let token = authToken else {
+            throw APIError.unauthorized
+        }
+        
+        // 방법 1: 서버에 직접 확인 요청 (이런 API가 있는 경우)
+        let url = URL(string: "\(baseURL)/apply/check/\(jobId)")!
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        print("🔵 지원 여부 확인 요청: \(url.absoluteString)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpResponse = response as? HTTPURLResponse
+            
+            print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+            
+            // 서버가 200 OK와 함께 true/false 반환하는 경우
+            if let httpResponse = httpResponse, httpResponse.statusCode == 200 {
+                if let boolResponse = try? JSONDecoder().decode(Bool.self, from: data) {
+                    return boolResponse
+                }
+                
+                // 또는 서버가 간단한 문자열 "true"/"false" 반환하는 경우
+                if let responseString = String(data: data, encoding: .utf8) {
+                    return responseString.lowercased().contains("true")
+                }
+            }
+            
+            // 방법 2: 위 API가 없다면, 모든 지원 내역을 가져와서 클라이언트에서 체크
+            return try await checkApplicationsContainJob(jobId: jobId)
+            
+        } catch {
+            print("🔴 지원 여부 확인 오류: \(error.localizedDescription)")
+            // 오류 발생 시 방법 2 시도
+            return try await checkApplicationsContainJob(jobId: jobId)
+        }
+    }
+
+    // 내 지원 내역에 특정 공고가 있는지 확인하는 보조 메서드
+    private func checkApplicationsContainJob(jobId: Int) async throws -> Bool {
+        do {
+            // 모든 지원 내역 가져오기
+            let applications = try await getMyApplications()
+            
+            // 지원 내역 중에 해당 공고 ID가 있는지 확인
+            return applications.contains(where: { $0.jobPostingId == jobId })
+        } catch {
+            print("🔴 지원 내역 확인 오류: \(error.localizedDescription)")
+            throw error
+        }
+    }
 }
