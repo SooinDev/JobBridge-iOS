@@ -1,0 +1,436 @@
+import Foundation
+
+enum APIError: Error {
+    case invalidURL
+    case noData
+    case decodingError
+    case unauthorized
+    case forbidden(String)
+    case serverError(String)
+    case unknown
+}
+
+class APIService {
+    static let shared = APIService() // 싱글톤 패턴
+    
+    // 실제 API 서버 URL로 변경해야 합니다
+    private let baseURL = "http://192.168.219.100:8080/api"
+    private var authToken: String? {
+        get { UserDefaults.standard.string(forKey: "authToken") }
+        set { UserDefaults.standard.set(newValue, forKey: "authToken") }
+    }
+    
+    private init() {}
+    
+    // MARK: - 인증 관련 API
+    
+    func login(email: String, password: String) async throws -> LoginResponse {
+        let url = URL(string: "\(baseURL)/user/login")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = ["email": email, "pw": password]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.unknown
+            }
+            
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized
+            }
+            
+            if httpResponse.statusCode != 200 {
+                throw APIError.serverError("Status code: \(httpResponse.statusCode)")
+            }
+            
+            let loginResponse = try JSONDecoder().decode(LoginResponse.self, from: data)
+            self.authToken = loginResponse.token
+            return loginResponse
+        } catch {
+            if let apiError = error as? APIError {
+                throw apiError
+            }
+            throw APIError.unknown
+        }
+    }
+    
+    func signup(request: SignupRequest) async throws -> String {
+        let url = URL(string: "\(baseURL)/user/signup")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let encoder = JSONEncoder()
+        urlRequest.httpBody = try encoder.encode(request)
+        
+        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.unknown
+        }
+        
+        if httpResponse.statusCode != 200 {
+            throw APIError.serverError("Status code: \(httpResponse.statusCode)")
+        }
+        
+        // 백엔드가 단순 문자열을 반환하는 경우
+        if let message = String(data: data, encoding: .utf8) {
+            return message
+        } else {
+            throw APIError.decodingError
+        }
+    }
+    
+    // MARK: - 이력서 관련 API
+    
+    func getMyResumes() async throws -> [ResumeResponse] {
+        guard let token = authToken else {
+            throw APIError.unauthorized
+        }
+        
+        let url = URL(string: "\(baseURL)/resume/my")!
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.unknown
+        }
+        
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+        
+        if httpResponse.statusCode != 200 {
+            throw APIError.serverError("Status code: \(httpResponse.statusCode)")
+        }
+        
+        return try JSONDecoder().decode([ResumeResponse].self, from: data)
+    }
+    
+    func createResume(request: ResumeRequest) async throws -> ResumeResponse {
+        guard let token = authToken else {
+            throw APIError.unauthorized
+        }
+        
+        let url = URL(string: "\(baseURL)/resume")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let encoder = JSONEncoder()
+        urlRequest.httpBody = try encoder.encode(request)
+        
+        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.unknown
+        }
+        
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+        
+        if httpResponse.statusCode != 200 {
+            throw APIError.serverError("Status code: \(httpResponse.statusCode)")
+        }
+        
+        return try JSONDecoder().decode(ResumeResponse.self, from: data)
+    }
+    
+    // MARK: - 채용공고 관련 API
+    
+    func getRecentJobs() async throws -> [JobPostingResponse] {
+        guard let token = authToken else {
+            throw APIError.unauthorized
+        }
+        
+        let url = URL(string: "\(baseURL)/jobs/recent")!
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.unknown
+        }
+        
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+        
+        if httpResponse.statusCode != 200 {
+            throw APIError.serverError("Status code: \(httpResponse.statusCode)")
+        }
+        
+        return try JSONDecoder().decode([JobPostingResponse].self, from: data)
+    }
+    
+    func getMatchingJobs(resumeId: Int) async throws -> [JobPostingResponse] {
+        guard let token = authToken else {
+            throw APIError.unauthorized
+        }
+        
+        let url = URL(string: "\(baseURL)/match/jobs?resumeId=\(resumeId)")!
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.unknown
+        }
+        
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+        
+        if httpResponse.statusCode != 200 {
+            throw APIError.serverError("Status code: \(httpResponse.statusCode)")
+        }
+        
+        return try JSONDecoder().decode([JobPostingResponse].self, from: data)
+    }
+    
+    // MARK: - 로그아웃 기능
+    
+    func logout() {
+        authToken = nil
+    }
+    
+    // 이메일 인증코드 요청 메서드
+    func sendVerificationCode(email: String) async throws -> String {
+        let url = URL(string: "\(baseURL)/user/send-code")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = ["email": email]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        print("🔵 인증코드 요청: \(url.absoluteString)")
+        print("🔵 요청 본문: \(body)")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let httpResponse = response as? HTTPURLResponse
+        print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+        print("🟢 응답 데이터: \(String(data: data, encoding: .utf8) ?? "")")
+        
+        guard let httpResponse = httpResponse, httpResponse.statusCode == 200 else {
+            if let message = String(data: data, encoding: .utf8) {
+                throw APIError.serverError(message)
+            }
+            throw APIError.unknown
+        }
+        
+        return String(data: data, encoding: .utf8) ?? "인증코드가 발송되었습니다."
+    }
+
+    // 이메일 인증코드 확인 메서드
+    func verifyCode(email: String, code: String) async throws -> String {
+        let url = URL(string: "\(baseURL)/user/verify")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = ["email": email, "code": code]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        print("🔵 인증코드 확인 요청: \(url.absoluteString)")
+        print("🔵 요청 본문: \(body)")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let httpResponse = response as? HTTPURLResponse
+        print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+        print("🟢 응답 데이터: \(String(data: data, encoding: .utf8) ?? "")")
+        
+        guard let httpResponse = httpResponse, httpResponse.statusCode == 200 else {
+            if let message = String(data: data, encoding: .utf8) {
+                throw APIError.serverError(message)
+            }
+            throw APIError.unknown
+        }
+        
+        return String(data: data, encoding: .utf8) ?? "이메일 인증이 완료되었습니다."
+    }
+    
+    // 지원 내역 조회 메서드
+    
+    func getMyApplications() async throws -> [ApplicationResponse] {
+        guard let token = authToken else {
+            throw APIError.unauthorized
+        }
+        
+        let url = URL(string: "\(baseURL)/applications/mine")!
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        print("🔵 지원내역 요청: \(url.absoluteString)")
+        print("🔵 인증 토큰: Bearer \(token)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpResponse = response as? HTTPURLResponse
+            
+            print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+            
+            // 응답 데이터 확인
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("🟢 지원내역 응답 데이터: \(responseString)")
+            } else {
+                print("🟡 응답 데이터를 문자열로 변환할 수 없습니다.")
+            }
+            
+            guard let httpResponse = httpResponse else {
+                throw APIError.unknown
+            }
+            
+            if httpResponse.statusCode == 403 {
+                throw APIError.forbidden("권한이 없습니다")
+            }
+            
+            if httpResponse.statusCode != 200 {
+                throw APIError.serverError("서버 오류: \(httpResponse.statusCode)")
+            }
+            
+            // 빈 응답 처리
+            if data.isEmpty {
+                print("🟡 응답 데이터가 비어 있습니다.")
+                return []
+            }
+            
+            // 응답 데이터 디코딩
+            do {
+                let decoder = JSONDecoder()
+                
+                // 날짜 포맷 처리를 위한 설정
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+                decoder.dateDecodingStrategy = .formatted(dateFormatter)
+                
+                // JSON 구조 분석 로그
+                if let json = try? JSONSerialization.jsonObject(with: data) {
+                    print("🟢 JSON 구조: \(json)")
+                }
+                
+                return try decoder.decode([ApplicationResponse].self, from: data)
+            } catch let decodingError {
+                print("🔴 디코딩 오류: \(decodingError)")
+                
+                // 디코딩 오류 상세 정보
+                if let decodingError = decodingError as? DecodingError {
+                    switch decodingError {
+                    case .keyNotFound(let key, let context):
+                        print("키를 찾을 수 없음: \(key.stringValue), 경로: \(context.codingPath)")
+                    case .typeMismatch(let type, let context):
+                        print("타입 불일치: \(type), 경로: \(context.codingPath)")
+                    case .valueNotFound(let type, let context):
+                        print("값을 찾을 수 없음: \(type), 경로: \(context.codingPath)")
+                    case .dataCorrupted(let context):
+                        print("데이터 손상: \(context)")
+                    @unknown default:
+                        print("알 수 없는 디코딩 오류")
+                    }
+                }
+                
+                throw APIError.decodingError
+            }
+        } catch {
+            print("🔴 네트워크 오류: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    // 채용공고 상세 조회
+    func getJobPosting(jobId: Int) async throws -> JobPostingResponse {
+        guard let token = authToken else {
+            throw APIError.unauthorized
+        }
+        
+        let url = URL(string: "\(baseURL)/job-posting/\(jobId)")!
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        print("🔵 채용공고 상세 요청: \(url.absoluteString)")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let httpResponse = response as? HTTPURLResponse
+        
+        print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+        
+        guard let httpResponse = httpResponse, httpResponse.statusCode == 200 else {
+            if let message = String(data: data, encoding: .utf8) {
+                print("🔴 서버 오류: \(message)")
+                throw APIError.serverError(message)
+            }
+            throw APIError.unknown
+        }
+        
+        return try JSONDecoder().decode(JobPostingResponse.self, from: data)
+    }
+
+    // 채용공고 지원하기
+    func applyToJob(jobId: Int) async throws -> String {
+        guard let token = authToken else {
+            throw APIError.unauthorized
+        }
+        
+        // URL 경로 확인
+        let url = URL(string: "\(baseURL)/apply/\(jobId)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // 빈 요청 본문 추가 (필요한 경우)
+        let emptyBody: [String: Any] = [:]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: emptyBody)
+        
+        print("🔵 채용공고 지원 요청: \(url.absoluteString)")
+        print("🔵 인증 토큰: \(token)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpResponse = response as? HTTPURLResponse
+            
+            print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+            print("🟢 응답 헤더: \(httpResponse?.allHeaderFields ?? [:])")
+            
+            if data.isEmpty {
+                print("🟡 응답 데이터가 비어 있습니다")
+            } else if let responseString = String(data: data, encoding: .utf8) {
+                print("🟢 응답 데이터: \(responseString)")
+            }
+            
+            // 오류 처리
+            guard let httpResponse = httpResponse else {
+                throw APIError.unknown
+            }
+            
+            if httpResponse.statusCode == 403 {
+                // 응답 본문이 비어 있으면 기본 메시지 사용
+                let errorMessage = data.isEmpty ? "권한이 없습니다. 개인 회원으로 로그인했는지 확인하세요." : (String(data: data, encoding: .utf8) ?? "권한 오류")
+                print("🔴 권한 오류: \(errorMessage)")
+                throw APIError.forbidden(errorMessage)
+            }
+            
+            if httpResponse.statusCode != 200 {
+                let errorMessage = data.isEmpty ? "서버 오류: \(httpResponse.statusCode)" : (String(data: data, encoding: .utf8) ?? "서버 오류")
+                print("🔴 서버 오류: \(errorMessage)")
+                throw APIError.serverError(errorMessage)
+            }
+            
+            return data.isEmpty ? "지원이 완료되었습니다." : (String(data: data, encoding: .utf8) ?? "지원이 완료되었습니다.")
+        } catch {
+            print("🔴 네트워크 오류: \(error.localizedDescription)")
+            throw error
+        }
+    }
+}
