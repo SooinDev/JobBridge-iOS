@@ -5,6 +5,8 @@ struct JobDetailView: View {
     @State private var showingApplyAlert = false
     @State private var showingSuccessAlert = false
     @State private var showingErrorAlert = false
+    @State private var isScrolled = false
+    @Environment(\.presentationMode) var presentationMode
     
     init(job: JobPostingResponse) {
         self._viewModel = StateObject(wrappedValue: JobDetailViewModel(job: job))
@@ -15,101 +17,126 @@ struct JobDetailView: View {
     }
     
     var body: some View {
-        ScrollView {
+        ZStack {
+            // 배경색
+            AppTheme.background
+                .ignoresSafeArea()
+            
             if viewModel.isLoading && viewModel.job == nil {
-                ProgressView("채용공고를 불러오는 중...")
-                    .padding(.top, 40)
+                LoadingView(message: "채용공고를 불러오는 중...")
             } else if let errorMessage = viewModel.errorMessage, viewModel.job == nil {
-                VStack(spacing: 20) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 60))
-                        .foregroundColor(.orange)
-                    
-                    Text("채용공고를 불러올 수 없습니다")
-                        .font(.headline)
-                    
-                    Text(errorMessage)
-                        .foregroundColor(.red)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                    
-                    Button(action: {
-                        viewModel.loadJob()
-                    }) {
-                        Text("다시 시도")
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                }
-                .padding()
+                ErrorView(
+                    message: errorMessage,
+                    retryAction: { viewModel.loadJob() }
+                )
             } else if let job = viewModel.job {
-                VStack(alignment: .leading, spacing: 20) {
-                    // 헤더 섹션
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(job.title)
-                            .font(.title)
-                            .fontWeight(.bold)
-                        
-                        Text(job.companyName ?? "기업명 없음")
-                            .font(.headline)
-                        
-                        HStack {
-                            Label(job.location, systemImage: "mappin.and.ellipse")
-                            Spacer()
-                            Label(job.experienceLevel, systemImage: "person.fill")
+                // 메인 컨텐츠
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        // 헤더 섹션
+                        VStack(alignment: .leading, spacing: 16) {
+                            // 회사 로고 (실제로는 네트워크 이미지를 사용할 수 있음)
+                            CompanyLogoView(companyName: job.companyName ?? "기업")
+                            
+                            // 제목 및 회사 정보
+                            Text(job.title)
+                                .heading2()
+                                .fixedSize(horizontal: false, vertical: true)
+                            
+                            Text(job.companyName ?? "기업명 없음")
+                                .heading3()
+                                .foregroundColor(AppTheme.primary)
+                            
+                            // 태그 목록
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 10) {
+                                    TagView(text: job.location, icon: "mappin.and.ellipse")
+                                    TagView(text: job.experienceLevel, icon: "person.fill")
+                                    TagView(text: job.position, icon: "briefcase.fill")
+                                    
+                                    if let matchRate = job.matchRate {
+                                        TagView(
+                                            text: "일치도: \(Int(matchRate * 100))%",
+                                            icon: "star.fill",
+                                            color: .green
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            Divider()
+                                .padding(.vertical, 8)
                         }
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
                         
-                        if let matchRate = job.matchRate {
-                            HStack {
-                                Spacer()
-                                Label("일치도: \(Int(matchRate * 100))%", systemImage: "star.fill")
-                                    .padding(8)
-                                    .background(Color.green.opacity(0.2))
-                                    .foregroundColor(.green)
-                                    .cornerRadius(20)
+                        // 정보 섹션
+                        VStack(alignment: .leading, spacing: 8) {
+                            SectionHeaderView(title: "직무 정보")
+                            
+                            DetailGrid(items: [
+                                DetailItem(icon: "briefcase.fill", title: "직무", value: job.position),
+                                DetailItem(icon: "creditcard.fill", title: "급여", value: job.salary),
+                                DetailItem(icon: "calendar", title: "등록일", value: job.createdAt.toFormattedDate()),
+                                DetailItem(icon: "clock.fill", title: "마감일", value: job.deadline?.toFormattedDate() ?? "상시채용")
+                            ])
+                        }
+                        
+                        // 스킬 섹션
+                        VStack(alignment: .leading, spacing: 12) {
+                            SectionHeaderView(title: "필요 기술")
+                            
+                            SkillTagsView(skills: job.requiredSkills.components(separatedBy: ","))
+                        }
+                        
+                        // 직무 설명 섹션
+                        VStack(alignment: .leading, spacing: 12) {
+                            SectionHeaderView(title: "직무 설명")
+                            
+                            Text(job.description)
+                                .body1()
+                                .lineSpacing(5)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        
+                        // 회사 정보 섹션 (있는 경우)
+                        if let companyEmail = job.companyEmail {
+                            VStack(alignment: .leading, spacing: 12) {
+                                SectionHeaderView(title: "회사 정보")
+                                
+                                HStack {
+                                    Image(systemName: "envelope.fill")
+                                        .foregroundColor(AppTheme.primary)
+                                    
+                                    Text(companyEmail)
+                                        .body1()
+                                }
+                                .padding()
+                                .background(AppTheme.secondaryBackground)
+                                .cornerRadius(10)
                             }
                         }
                         
-                        Divider()
-                    }
-                    .padding(.horizontal)
-                    
-                    // 상세 정보 섹션
-                    VStack(alignment: .leading, spacing: 15) {
-                        DetailRow(title: "직무", content: job.position)
-                        DetailRow(title: "필요 기술", content: job.requiredSkills)
-                        DetailRow(title: "급여", content: job.salary)
-                        
-                        if let deadline = job.deadline {
-                            DetailRow(title: "마감일", content: deadline.toFormattedDate())
+                        // 지원 상태 메시지 (있는 경우)
+                        if let errorMessage = viewModel.applicationErrorMessage {
+                            Text(errorMessage)
+                                .foregroundColor(AppTheme.error)
+                                .font(.footnote)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding()
+                                .background(AppTheme.error.opacity(0.1))
+                                .cornerRadius(10)
                         }
                         
-                        DetailRow(title: "등록일", content: job.createdAt.toFormattedDate())
+                        // 추가 공간 (하단 지원 버튼을 가리지 않게)
+                        Spacer()
+                            .frame(height: 80)
                     }
                     .padding(.horizontal)
-                    
-                    // 직무 설명 섹션
-                    VStack(alignment: .leading, spacing: 15) {
-                        Text("직무 설명")
-                            .font(.headline)
-                        
-                        Text(job.description)
-                            .lineSpacing(5)
-                    }
-                    .padding(.horizontal)
-                    
-                    // 지원 상태 메시지 (있는 경우)
-                    if let errorMessage = viewModel.applicationErrorMessage {
-                        Text(errorMessage)
-                            .foregroundColor(.red)
-                            .font(.footnote)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.horizontal)
-                    }
+                    .padding(.top)
+                }
+                
+                // 하단 고정 지원 버튼
+                VStack {
+                    Spacer()
                     
                     // 지원 버튼
                     Button(action: {
@@ -130,24 +157,31 @@ struct JobDetailView: View {
                                 Text("확인 중...")
                             } else {
                                 Image(systemName: viewModel.isApplied ? "checkmark.circle.fill" : "paperplane.fill")
+                                    .font(.system(size: 18))
                                 Text(viewModel.isApplied ? "지원 완료" : "지원하기")
+                                    .fontWeight(.semibold)
                             }
                         }
                         .padding()
                         .frame(maxWidth: .infinity)
-                        .background(viewModel.isApplied ? Color.gray : Color.blue)
+                        .background(viewModel.isApplied ? Color.gray : AppTheme.primary)
                         .foregroundColor(.white)
-                        .cornerRadius(10)
+                        .cornerRadius(12)
+                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 10)
+                    .padding()
+                    .background(
+                        Rectangle()
+                            .fill(Color.white)
+                            .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: -3)
+                    )
                     .disabled(viewModel.isLoading || viewModel.isCheckingApplication)
                 }
-                .padding(.vertical)
             }
         }
         .navigationTitle("채용공고 상세")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarItems(leading: BackButton())
         .onAppear {
             // 화면이 나타날 때마다 지원 여부 다시 확인
             viewModel.checkIfAlreadyApplied()
@@ -184,19 +218,146 @@ struct JobDetailView: View {
     }
 }
 
-struct DetailRow: View {
-    let title: String
-    let content: String
+// MARK: - 컴포넌트
+struct BackButton: View {
+    @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title)
-                .font(.headline)
-                .foregroundColor(.secondary)
-            
-            Text(content)
-                .font(.body)
+        Button(action: {
+            presentationMode.wrappedValue.dismiss()
+        }) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(AppTheme.primary)
+                .padding(8)
+                .background(Circle().fill(AppTheme.secondaryBackground))
         }
+    }
+}
+
+struct CompanyLogoView: View {
+    let companyName: String
+    
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(AppTheme.primary.opacity(0.1))
+                .frame(width: 70, height: 70)
+            
+            Text(String(companyName.prefix(1)))
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(AppTheme.primary)
+        }
+    }
+}
+
+struct TagView: View {
+    let text: String
+    let icon: String
+    var color: Color = AppTheme.primary
+    
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+            
+            Text(text)
+                .font(.system(size: 13))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.1))
+        .foregroundColor(color)
+        .cornerRadius(16)
+    }
+}
+
+struct SectionHeaderView: View {
+    let title: String
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .heading3()
+            
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct DetailItem: Identifiable {
+    let id = UUID()
+    let icon: String
+    let title: String
+    let value: String
+}
+
+struct DetailGrid: View {
+    let items: [DetailItem]
+    
+    var body: some View {
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 16),
+            GridItem(.flexible(), spacing: 16)
+        ], spacing: 16) {
+            ForEach(items) { item in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: item.icon)
+                            .foregroundColor(AppTheme.primary)
+                            .frame(width: 20)
+                        
+                        Text(item.title)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.textSecondary)
+                    }
+                    
+                    Text(item.value)
+                        .body1()
+                        .lineLimit(1)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.secondaryBackground)
+                .cornerRadius(10)
+            }
+        }
+    }
+}
+
+struct SkillTagsView: View {
+    let skills: [String]
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(skills.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }, id: \.self) { skill in
+                    Text(skill.trimmingCharacters(in: .whitespacesAndNewlines))
+                        .font(.system(size: 14))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundColor(AppTheme.primary)
+                        .cornerRadius(20)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+}
+
+extension String {
+    func toFormattedDate() -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm"
+        
+        if let date = dateFormatter.date(from: self) {
+            dateFormatter.dateFormat = "yyyy년 M월 d일"
+            return dateFormatter.string(from: date)
+        }
+        
+        return self
     }
 }
 
@@ -219,20 +380,5 @@ struct JobDetailView_Previews: PreviewProvider {
                 matchRate: 0.85
             ))
         }
-    }
-}
-
-// String 확장 메서드가 없다면 추가
-extension String {
-    func toFormattedDate() -> String {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm"
-        
-        if let date = dateFormatter.date(from: self) {
-            dateFormatter.dateFormat = "yyyy년 M월 d일"
-            return dateFormatter.string(from: date)
-        }
-        
-        return self
     }
 }
