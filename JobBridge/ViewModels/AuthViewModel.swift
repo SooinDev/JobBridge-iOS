@@ -51,14 +51,8 @@ class AuthViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self.isLoading = false
                     if let apiError = error as? APIError {
-                        switch apiError {
-                        case .unauthorized:
-                            self.errorMessage = "이메일 또는 비밀번호가 올바르지 않습니다."
-                        case .serverError(let message):
-                            self.errorMessage = "서버 오류: \(message)"
-                        default:
-                            self.errorMessage = "로그인 중 오류가 발생했습니다."
-                        }
+                        // errorMessage 속성 사용
+                        self.errorMessage = apiError.errorMessage
                     } else {
                         self.errorMessage = "네트워크 오류가 발생했습니다."
                     }

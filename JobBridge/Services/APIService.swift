@@ -4,10 +4,29 @@ enum APIError: Error {
     case invalidURL
     case noData
     case decodingError
-    case unauthorized
+    case unauthorized(String)
     case forbidden(String)
     case serverError(String)
     case unknown
+    
+    var errorMessage: String {
+            switch self {
+            case .invalidURL:
+                return "유효하지 않은 URL입니다."
+            case .noData:
+                return "데이터를 받아오지 못했습니다."
+            case .decodingError:
+                return "데이터 형식에 문제가 있습니다."
+            case .unauthorized(let message):
+                return message
+            case .forbidden(let message):
+                return message
+            case .serverError(let message):
+                return "서버 오류: \(message)"
+            case .unknown:
+                return "알 수 없는 오류가 발생했습니다."
+            }
+        }
 }
 
 class APIService {
@@ -50,27 +69,35 @@ class APIService {
                 throw APIError.unknown
             }
             
+            // 401 Unauthorized 상태 코드 처리
             if httpResponse.statusCode == 401 {
-                throw APIError.unauthorized
+                // 오류 메시지 파싱 시도
+                if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
+                   let errorMessage = errorResponse["message"] {
+                    throw APIError.unauthorized(errorMessage)
+                } else {
+                    throw APIError.unauthorized("아이디 또는 비밀번호가 일치하지 않습니다.")
+                }
             }
             
             if httpResponse.statusCode != 200 {
-                throw APIError.serverError("Status code: \(httpResponse.statusCode)")
+                if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
+                   let errorMessage = errorResponse["message"] {
+                    throw APIError.serverError(errorMessage)
+                } else {
+                    throw APIError.serverError("Status code: \(httpResponse.statusCode)")
+                }
             }
             
             let loginResponse = try JSONDecoder().decode(LoginResponse.self, from: data)
             
-            // rememberMe 매개변수에 따라 토큰 저장 방식 변경
             if rememberMe {
                 // 로그인 유지 시 UserDefaults에 토큰 저장
                 self.authToken = loginResponse.token
-                // 추가로 사용자 정보도 저장할 수 있음
                 saveUserInfo(loginResponse)
             } else {
                 // 로그인 유지를 원하지 않는 경우
-                // 기존 저장된 토큰이 있다면 삭제
                 UserDefaults.standard.removeObject(forKey: "authToken")
-                // 메모리에만 토큰 보관
                 self.temporaryAuthToken = loginResponse.token
             }
             
@@ -114,7 +141,7 @@ class APIService {
     
     func getMyResumes() async throws -> [ResumeResponse] {
         guard let token = authToken else {
-            throw APIError.unauthorized
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
         }
         
         let url = URL(string: "\(baseURL)/resume/my")!
@@ -128,7 +155,7 @@ class APIService {
         }
         
         if httpResponse.statusCode == 401 {
-            throw APIError.unauthorized
+            throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
         }
         
         if httpResponse.statusCode != 200 {
@@ -140,7 +167,7 @@ class APIService {
     
     func createResume(request: ResumeRequest) async throws -> ResumeResponse {
         guard let token = authToken else {
-            throw APIError.unauthorized
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
         }
         
         let url = URL(string: "\(baseURL)/resume")!
@@ -159,7 +186,7 @@ class APIService {
         }
         
         if httpResponse.statusCode == 401 {
-            throw APIError.unauthorized
+            throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
         }
         
         if httpResponse.statusCode != 200 {
@@ -173,7 +200,7 @@ class APIService {
     
     func getRecentJobs() async throws -> [JobPostingResponse] {
         guard let token = authToken else {
-            throw APIError.unauthorized
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
         }
         
         let url = URL(string: "\(baseURL)/jobs/recent")!
@@ -187,7 +214,7 @@ class APIService {
         }
         
         if httpResponse.statusCode == 401 {
-            throw APIError.unauthorized
+            throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
         }
         
         if httpResponse.statusCode != 200 {
@@ -199,7 +226,7 @@ class APIService {
     
     func getMatchingJobs(resumeId: Int) async throws -> [JobPostingResponse] {
         guard let token = authToken else {
-            throw APIError.unauthorized
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
         }
         
         let url = URL(string: "\(baseURL)/match/jobs?resumeId=\(resumeId)")!
@@ -213,7 +240,7 @@ class APIService {
         }
         
         if httpResponse.statusCode == 401 {
-            throw APIError.unauthorized
+            throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
         }
         
         if httpResponse.statusCode != 200 {
@@ -296,7 +323,7 @@ class APIService {
     
     func getMyApplications() async throws -> [ApplicationResponse] {
         guard let token = authToken else {
-            throw APIError.unauthorized
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
         }
         
         let url = URL(string: "\(baseURL)/applications/mine")!
@@ -382,7 +409,7 @@ class APIService {
     // 채용공고 상세 조회
     func getJobPosting(jobId: Int) async throws -> JobPostingResponse {
         guard let token = authToken else {
-            throw APIError.unauthorized
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
         }
         
         let url = URL(string: "\(baseURL)/job-posting/\(jobId)")!
@@ -410,7 +437,7 @@ class APIService {
     // 채용공고 지원하기
     func applyToJob(jobId: Int) async throws -> String {
         guard let token = authToken else {
-            throw APIError.unauthorized
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
         }
         
         // URL 경로 확인
@@ -468,7 +495,7 @@ class APIService {
     // 이미 지원한 공고인지 확인하는 메서드
     func checkIfAlreadyApplied(jobId: Int) async throws -> Bool {
         guard let token = authToken else {
-            throw APIError.unauthorized
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
         }
         
         // 방법 1: 서버에 직접 확인 요청 (이런 API가 있는 경우)
