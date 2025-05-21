@@ -15,16 +15,26 @@ class APIService {
     
     // 실제 API 서버 URL로 변경해야 합니다
     private let baseURL = "http://192.168.219.100:8080/api"
+    
+    // 임시 토큰을 위한 속성 추가
+    private var temporaryAuthToken: String?
+    
+    // 인증 토큰 접근자 수정
     private var authToken: String? {
-        get { UserDefaults.standard.string(forKey: "authToken") }
-        set { UserDefaults.standard.set(newValue, forKey: "authToken") }
+        get {
+            // 먼저 임시 토큰을 확인하고, 없으면 UserDefaults에서 확인
+            return temporaryAuthToken ?? UserDefaults.standard.string(forKey: "authToken")
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "authToken")
+        }
     }
     
     private init() {}
     
     // MARK: - 인증 관련 API
     
-    func login(email: String, password: String) async throws -> LoginResponse {
+    func login(email: String, password: String, rememberMe: Bool = false) async throws -> LoginResponse {
         let url = URL(string: "\(baseURL)/user/login")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -49,7 +59,21 @@ class APIService {
             }
             
             let loginResponse = try JSONDecoder().decode(LoginResponse.self, from: data)
-            self.authToken = loginResponse.token
+            
+            // rememberMe 매개변수에 따라 토큰 저장 방식 변경
+            if rememberMe {
+                // 로그인 유지 시 UserDefaults에 토큰 저장
+                self.authToken = loginResponse.token
+                // 추가로 사용자 정보도 저장할 수 있음
+                saveUserInfo(loginResponse)
+            } else {
+                // 로그인 유지를 원하지 않는 경우
+                // 기존 저장된 토큰이 있다면 삭제
+                UserDefaults.standard.removeObject(forKey: "authToken")
+                // 메모리에만 토큰 보관
+                self.temporaryAuthToken = loginResponse.token
+            }
+            
             return loginResponse
         } catch {
             if let apiError = error as? APIError {
@@ -202,7 +226,14 @@ class APIService {
     // MARK: - 로그아웃 기능
     
     func logout() {
-        authToken = nil
+        // 토큰 삭제
+        temporaryAuthToken = nil
+        UserDefaults.standard.removeObject(forKey: "authToken")
+        
+        // 사용자 정보 삭제
+        UserDefaults.standard.removeObject(forKey: "userName")
+        UserDefaults.standard.removeObject(forKey: "userEmail")
+        UserDefaults.standard.removeObject(forKey: "userType")
     }
     
     // 이메일 인증코드 요청 메서드
@@ -487,5 +518,13 @@ class APIService {
             print("🔴 지원 내역 확인 오류: \(error.localizedDescription)")
             throw error
         }
+    }
+    
+    // 사용자 정보 저장 메서드
+    private func saveUserInfo(_ loginResponse: LoginResponse) {
+        // 사용자 정보 UserDefaults에 저장
+        UserDefaults.standard.set(loginResponse.name, forKey: "userName")
+        UserDefaults.standard.set(loginResponse.email, forKey: "userEmail")
+        UserDefaults.standard.set(loginResponse.userType, forKey: "userType")
     }
 }

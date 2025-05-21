@@ -187,7 +187,7 @@ struct LoginView: View {
                                                                to: nil,
                                                                from: nil,
                                                                for: nil)
-                                viewModel.login(email: email, password: password)
+                                viewModel.login(email: email, password: password, rememberMe: rememberMe)
                             }) {
                                 Group {
                                     if viewModel.isLoading {

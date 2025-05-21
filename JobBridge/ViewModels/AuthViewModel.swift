@@ -13,17 +13,35 @@ class AuthViewModel: ObservableObject {
         // 앱 시작 시 토큰 존재 여부 확인
         if UserDefaults.standard.string(forKey: "authToken") != nil {
             self.isAuthenticated = true
-            // 필요한 경우 사용자 정보 로드
+            // 저장된 사용자 정보가 있다면 로드
+            loadSavedUserInfo()
         }
     }
     
-    func login(email: String, password: String) {
+    // 저장된 사용자 정보 로드
+    private func loadSavedUserInfo() {
+        let name = UserDefaults.standard.string(forKey: "userName") ?? ""
+        let email = UserDefaults.standard.string(forKey: "userEmail") ?? ""
+        let userType = UserDefaults.standard.string(forKey: "userType") ?? ""
+        
+        if !name.isEmpty && !email.isEmpty && !userType.isEmpty {
+            // 저장된 정보로 사용자 객체 생성
+            self.currentUser = LoginResponse(
+                token: UserDefaults.standard.string(forKey: "authToken") ?? "",
+                name: name,
+                email: email,
+                userType: userType
+            )
+        }
+    }
+    
+    func login(email: String, password: String, rememberMe: Bool = false) {
         isLoading = true
         errorMessage = nil
         
         Task {
             do {
-                let response = try await apiService.login(email: email, password: password)
+                let response = try await apiService.login(email: email, password: password, rememberMe: rememberMe)
                 DispatchQueue.main.async {
                     self.currentUser = response
                     self.isAuthenticated = true
