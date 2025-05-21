@@ -527,4 +527,67 @@ class APIService {
         UserDefaults.standard.set(loginResponse.email, forKey: "userEmail")
         UserDefaults.standard.set(loginResponse.userType, forKey: "userType")
     }
+    
+    // APIService.swift에 추가
+    func requestPasswordReset(email: String) async throws -> String {
+        let url = URL(string: "\(baseURL)/user/password-reset")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = ["email": email]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.unknown
+        }
+        
+        if httpResponse.statusCode != 200 {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "서버 오류"
+            throw APIError.serverError(errorMessage)
+        }
+        
+        // 응답 메시지 파싱
+        if let responseDict = try? JSONDecoder().decode([String: String].self, from: data),
+           let message = responseDict["message"] {
+            return message
+        }
+        
+        return "비밀번호 재설정 코드가 이메일로 발송되었습니다. 이메일을 확인해주세요."
+    }
+
+    // 비밀번호 변경 함수 (토큰 검증 및 새 비밀번호 설정)
+    func resetPassword(token: String, newPassword: String) async throws -> String {
+        let url = URL(string: "\(baseURL)/user/password-reset/confirm")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = [
+            "token": token,
+            "newPassword": newPassword
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.unknown
+        }
+        
+        if httpResponse.statusCode != 200 {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "서버 오류"
+            throw APIError.serverError(errorMessage)
+        }
+        
+        // 응답 메시지 파싱
+        if let responseDict = try? JSONDecoder().decode([String: String].self, from: data),
+           let message = responseDict["message"] {
+            return message
+        }
+        
+        return "비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해주세요."
+    }
 }
