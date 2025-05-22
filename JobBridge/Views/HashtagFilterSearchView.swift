@@ -34,26 +34,6 @@ struct FlowLayout: Layout {
     }
 }
 
-struct InfoTag: View {
-    let icon: String
-    let text: String
-    let color: Color
-    
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.caption2)
-            Text(text)
-                .font(.caption)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(color.opacity(0.1))
-        .foregroundColor(color)
-        .cornerRadius(12)
-    }
-}
-
 struct FlowResult {
     let size: CGSize
     let positions: [CGPoint]
@@ -72,7 +52,6 @@ struct FlowResult {
             sizes.append(size)
             
             if currentRowWidth + size.width > maxWidth && !positions.isEmpty {
-                // 새 줄 시작
                 currentRowY += currentRowHeight + spacing
                 currentRowWidth = 0
                 currentRowHeight = 0
@@ -92,538 +71,338 @@ struct FlowResult {
     }
 }
 
-// MARK: - Hashtag Category Model
+// MARK: - Clean Hashtag Category Model
 
-struct HashtagCategory {
+struct CleanHashtagCategory {
+    let id = UUID()
     let title: String
     let hashtags: [String]
 }
 
-// MARK: - Main View
+// MARK: - Clean Main View
 
 struct HashtagFilterSearchView: View {
     @StateObject private var viewModel = JobSearchViewModel()
     @State private var selectedHashtags: Set<String> = []
     @State private var selectedLocation = ""
     @State private var selectedExperience = ""
-    @State private var showingAdvancedFilters = false
+    @State private var searchText = ""
+    @State private var showingFilters = false
     
-    // 사전 선택된 해시태그 지원
     let preselectedHashtag: String?
     
-    // 해시태그 카테고리별 분류
+    // 간단하고 깔끔한 카테고리 구성
     private let hashtagCategories = [
-        HashtagCategory(
+        CleanHashtagCategory(
             title: "프로그래밍 언어",
-            hashtags: ["#자바", "#Python", "#JavaScript", "#TypeScript", "#C++", "#C#", "#Swift", "#Kotlin", "#Go", "#Rust"]
+            hashtags: ["#JavaScript", "#Python", "#Java", "#TypeScript", "#Swift", "#Kotlin", "#Go", "#Rust"]
         ),
-        HashtagCategory(
+        CleanHashtagCategory(
             title: "프레임워크",
-            hashtags: ["#Spring", "#Django", "#React", "#Vue", "#Angular", "#Express", "#Flutter", "#SwiftUI", "#UIKit", "#RxSwift"]
+            hashtags: ["#React", "#Vue", "#Angular", "#Spring", "#Django", "#Express", "#Flutter", "#SwiftUI"]
         ),
-        HashtagCategory(
-            title: "개발 분야",
-            hashtags: ["#백엔드", "#프론트엔드", "#풀스택", "#모바일", "#웹개발", "#앱개발", "#게임개발", "#시스템개발"]
+        CleanHashtagCategory(
+            title: "AI & 데이터",
+            hashtags: ["#AI", "#머신러닝", "#데이터분석", "#빅데이터", "#TensorFlow", "#PyTorch", "#SQL", "#Pandas"]
         ),
-        HashtagCategory(
-            title: "기술 영역",
-            hashtags: ["#AI", "#머신러닝", "#데이터분석", "#블록체인", "#클라우드", "#DevOps", "#보안", "#IoT"]
+        CleanHashtagCategory(
+            title: "클라우드 & DevOps",
+            hashtags: ["#AWS", "#Azure", "#GCP", "#Docker", "#Kubernetes", "#CI/CD", "#DevOps", "#Terraform"]
         ),
-        HashtagCategory(
-            title: "데이터베이스",
-            hashtags: ["#MySQL", "#PostgreSQL", "#MongoDB", "#Redis", "#Oracle", "#SQLServer", "#Elasticsearch"]
+        CleanHashtagCategory(
+            title: "모바일",
+            hashtags: ["#iOS", "#Android", "#Flutter", "#ReactNative", "#SwiftUI", "#UIKit", "#Jetpack", "#Compose"]
         ),
-        HashtagCategory(
-            title: "직무",
-            hashtags: ["#개발자", "#엔지니어", "#아키텍트", "#팀리드", "#CTO", "#테크리드", "#시니어개발자", "#주니어개발자"]
+        CleanHashtagCategory(
+            title: "기타",
+            hashtags: ["#프론트엔드", "#백엔드", "#풀스택", "#UI/UX", "#블록체인", "#보안", "#게임개발", "#IoT"]
         )
     ]
     
-    // 지역 및 경험 옵션
     private let locations = ["서울", "경기", "인천", "부산", "대구", "대전", "광주", "울산", "세종", "제주", "전국"]
-    private let experienceLevels = ["신입", "경력 1-3년", "경력 3-5년", "경력 5년 이상", "시니어"]
+    private let experienceLevels = ["신입", "1-3년", "3-5년", "5-10년", "10년+"]
     
-    // 기본 생성자
     init() {
         self.preselectedHashtag = nil
     }
     
-    // 사전 선택된 해시태그가 있는 생성자
     init(preselectedHashtag: String) {
         self.preselectedHashtag = preselectedHashtag
     }
     
     var body: some View {
         VStack(spacing: 0) {
-            // 상단 선택된 해시태그 표시
-            if !selectedHashtags.isEmpty {
-                SelectedHashtagsView(
-                    selectedHashtags: Array(selectedHashtags),
-                    onRemove: { hashtag in
-                        selectedHashtags.remove(hashtag)
-                        performSearch()
-                    },
-                    onClear: {
-                        selectedHashtags.removeAll()
-                        viewModel.clearSearch()
-                        viewModel.loadRecentJobs()
-                    }
-                )
-                .padding()
-                .background(AppTheme.secondaryBackground)
-                
-                Divider()
+            // 상단 검색 영역
+            searchSection
+            
+            // 선택된 필터 표시
+            if hasActiveFilters {
+                selectedFiltersSection
             }
             
-            // 해시태그 카테고리 및 필터
-            ScrollView {
-                VStack(spacing: 20) {
-                    // 고급 필터 토글
-                    HStack {
-                        Text("필터")
-                            .font(.headline)
-                        
-                        Spacer()
-                        
-                        Button(action: {
-                            withAnimation {
-                                showingAdvancedFilters.toggle()
-                            }
-                        }) {
-                            HStack {
-                                Text(showingAdvancedFilters ? "간단히" : "상세 필터")
-                                Image(systemName: showingAdvancedFilters ? "chevron.up" : "chevron.down")
-                            }
-                            .font(.caption)
-                            .foregroundColor(AppTheme.primary)
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    // 고급 필터 (지역, 경험)
-                    if showingAdvancedFilters {
-                        VStack(spacing: 16) {
-                            // 지역 필터
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("지역")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .padding(.horizontal)
-                                
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 8) {
-                                        ForEach(locations, id: \.self) { location in
-                                            FilterButton(
-                                                text: location,
-                                                isSelected: selectedLocation == location,
-                                                onTap: {
-                                                    selectedLocation = selectedLocation == location ? "" : location
-                                                    performSearch()
-                                                }
-                                            )
-                                        }
-                                    }
-                                    .padding(.horizontal)
-                                }
-                            }
-                            
-                            // 경험 수준 필터
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("경험 수준")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .padding(.horizontal)
-                                
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 8) {
-                                        ForEach(experienceLevels, id: \.self) { level in
-                                            FilterButton(
-                                                text: level,
-                                                isSelected: selectedExperience == level,
-                                                onTap: {
-                                                    selectedExperience = selectedExperience == level ? "" : level
-                                                    performSearch()
-                                                }
-                                            )
-                                        }
-                                    }
-                                    .padding(.horizontal)
-                                }
-                            }
-                        }
-                        .padding(.vertical)
-                        .background(AppTheme.background)
-                        .cornerRadius(12)
-                        .padding(.horizontal)
-                    }
-                    
-                    // 해시태그 카테고리
-                    ForEach(hashtagCategories, id: \.title) { category in
-                        HashtagCategoryView(
-                            category: category,
-                            selectedHashtags: selectedHashtags,
-                            onHashtagTap: { hashtag in
-                                toggleHashtag(hashtag)
-                            }
-                        )
-                    }
-                }
-            }
-            
-            Divider()
-            
-            // 검색 결과
-            SearchResultsSection(viewModel: viewModel)
-        }
-        .navigationTitle("해시태그 검색")
-        .onAppear {
-            // 사전 선택된 해시태그가 있으면 자동 선택 및 검색
-            if let preselected = preselectedHashtag {
-                selectedHashtags.insert(preselected)
-                // 약간의 지연 후 검색 실행
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    performSearch()
-                }
+            // 메인 컨텐츠
+            if viewModel.hasSearched && !viewModel.searchResults.isEmpty {
+                // 검색 결과가 있을 때
+                searchResultsList
+            } else if viewModel.hasSearched && viewModel.searchResults.isEmpty {
+                // 검색 결과가 없을 때
+                noResultsView
             } else {
-                viewModel.loadRecentJobs()
+                // 검색 전 상태 - 카테고리 표시
+                hashtagCategoriesView
             }
         }
-    }
-    
-    // MARK: - Helper Methods
-    
-    private func toggleHashtag(_ hashtag: String) {
-        if selectedHashtags.contains(hashtag) {
-            selectedHashtags.remove(hashtag)
-        } else {
-            selectedHashtags.insert(hashtag)
-        }
-        
-        performSearch()
-    }
-    
-    private func performSearch() {
-        if selectedHashtags.isEmpty && selectedLocation.isEmpty && selectedExperience.isEmpty {
-            // 필터가 모두 비어있으면 최근 공고 표시
-            viewModel.clearSearch()
-            viewModel.loadRecentJobs()
-        } else {
-            // 선택된 해시태그들을 검색어로 변환
-            let searchKeyword = selectedHashtags.isEmpty ? nil : Array(selectedHashtags).joined(separator: " ")
-            
-            let searchRequest = JobSearchRequest(
-                keyword: searchKeyword,
-                location: selectedLocation.isEmpty ? nil : selectedLocation,
-                experienceLevel: selectedExperience.isEmpty ? nil : selectedExperience,
-                activeOnly: true
-            )
-            
-            viewModel.searchJobs(request: searchRequest)
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("해시태그 검색")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            setupInitialState()
         }
     }
-}
-
-// MARK: - Selected Hashtags View
-
-struct SelectedHashtagsView: View {
-    let selectedHashtags: [String]
-    let onRemove: (String) -> Void
-    let onClear: () -> Void
     
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    // MARK: - UI Sections
+    
+    private var searchSection: some View {
+        VStack(spacing: 16) {
+            // 검색바
             HStack {
-                Text("선택된 해시태그 (\(selectedHashtags.count))")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                HStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    
+                    TextField("기술, 회사, 직무 검색", text: $searchText)
+                        .onSubmit { performTextSearch() }
+                    
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
+                .padding(12)
+                .background(Color(.systemBackground))
+                .cornerRadius(8)
                 
-                Spacer()
-                
-                Button("전체 삭제", action: onClear)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
-            
-            // 선택된 해시태그들을 FlowLayout으로 표시
-            FlowLayout(spacing: 8) {
-                ForEach(selectedHashtags, id: \.self) { hashtag in
-                    SelectedHashtagChip(
-                        hashtag: hashtag,
-                        onRemove: { onRemove(hashtag) }
-                    )
+                // 필터 버튼
+                Button(action: { showingFilters.toggle() }) {
+                    Image(systemName: "slider.horizontal.3")
+                        .foregroundColor(AppTheme.primary)
+                        .padding(12)
+                        .background(showingFilters ? AppTheme.primary.opacity(0.1) : Color(.systemBackground))
+                        .cornerRadius(8)
                 }
             }
-        }
-    }
-}
-
-// MARK: - Selected Hashtag Chip
-
-struct SelectedHashtagChip: View {
-    let hashtag: String
-    let onRemove: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(hashtag)
-                .font(.caption)
-                .foregroundColor(.white)
             
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.8))
+            // 필터 옵션 (토글 가능)
+            if showingFilters {
+                VStack(spacing: 12) {
+                    filterRow(title: "지역", items: locations, selected: $selectedLocation)
+                    filterRow(title: "경력", items: experienceLevels, selected: $selectedExperience)
+                }
+                .transition(.slide)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(AppTheme.primary)
-        .cornerRadius(16)
-        .shadow(color: AppTheme.primary.opacity(0.3), radius: 2, x: 0, y: 1)
+        .padding(16)
+        .background(Color(.systemBackground))
     }
-}
-
-// MARK: - Hashtag Category View
-
-struct HashtagCategoryView: View {
-    let category: HashtagCategory
-    let selectedHashtags: Set<String>
-    let onHashtagTap: (String) -> Void
     
-    var body: some View {
+    private var selectedFiltersSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(selectedHashtags), id: \.self) { hashtag in
+                    selectedFilterChip(text: hashtag, onRemove: { removeHashtag(hashtag) })
+                }
+                
+                if !selectedLocation.isEmpty {
+                    selectedFilterChip(text: selectedLocation, onRemove: {
+                        selectedLocation = ""
+                        performSearch()
+                    })
+                }
+                
+                if !selectedExperience.isEmpty {
+                    selectedFilterChip(text: selectedExperience, onRemove: {
+                        selectedExperience = ""
+                        performSearch()
+                    })
+                }
+                
+                Button("전체 삭제") {
+                    clearAllFilters()
+                }
+                .font(.caption)
+                .foregroundColor(.red)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(16)
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.vertical, 8)
+        .background(Color(.systemBackground))
+    }
+    
+    private var hashtagCategoriesView: some View {
+        ScrollView {
+            LazyVStack(spacing: 24) {
+                ForEach(hashtagCategories, id: \.id) { category in
+                    categorySection(category)
+                }
+            }
+            .padding(16)
+        }
+    }
+    
+    private var searchResultsList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 결과 헤더
+            HStack {
+                Text("검색 결과")
+                    .font(.headline)
+                Spacer()
+                Text("\(viewModel.searchResults.count)건")
+                    .foregroundColor(.secondary)
+            }
+            .padding(16)
+            .background(Color(.systemBackground))
+            
+            // 결과 목록
+            List(viewModel.searchResults) { job in
+                NavigationLink(destination: JobDetailView(job: job)) {
+                    cleanJobRow(job: job)
+                }
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            }
+            .listStyle(PlainListStyle())
+        }
+    }
+    
+    private var noResultsView: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 48))
+                .foregroundColor(.gray)
+            
+            Text("검색 결과가 없습니다")
+                .font(.headline)
+            
+            Text("다른 키워드나 필터를 시도해보세요")
+                .foregroundColor(.secondary)
+            
+            Button("필터 초기화") {
+                clearAllFilters()
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(AppTheme.primary)
+            .foregroundColor(.white)
+            .cornerRadius(8)
+            
+            Spacer()
+        }
+        .padding()
+    }
+    
+    // MARK: - Helper Views
+    
+    private func filterRow(title: String, items: [String], selected: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.medium)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(items, id: \.self) { item in
+                        Button(item) {
+                            selected.wrappedValue = selected.wrappedValue == item ? "" : item
+                            performSearch()
+                        }
+                        .font(.caption)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(selected.wrappedValue == item ? AppTheme.primary : Color(.systemGray6))
+                        .foregroundColor(selected.wrappedValue == item ? .white : .primary)
+                        .cornerRadius(16)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+    
+    private func categorySection(_ category: CleanHashtagCategory) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(category.title)
                     .font(.headline)
-                    .padding(.horizontal)
+                    .fontWeight(.semibold)
                 
                 Spacer()
                 
-                // 카테고리별 선택된 개수 표시
-                if !selectedInCategory.isEmpty {
-                    Text("\(selectedInCategory.count)개 선택")
+                let selectedCount = selectedHashtags.intersection(Set(category.hashtags)).count
+                if selectedCount > 0 {
+                    Text("\(selectedCount)개 선택")
                         .font(.caption)
                         .foregroundColor(AppTheme.primary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(AppTheme.primary.opacity(0.1))
                         .cornerRadius(12)
-                        .padding(.horizontal)
                 }
             }
             
-            // 해시태그 버튼들
-            LazyVGrid(columns: [
-                GridItem(.adaptive(minimum: 100), spacing: 8)
-            ], spacing: 8) {
+            FlowLayout(spacing: 8) {
                 ForEach(category.hashtags, id: \.self) { hashtag in
-                    HashtagButton(
-                        hashtag: hashtag,
-                        isSelected: selectedHashtags.contains(hashtag),
-                        onTap: { onHashtagTap(hashtag) }
-                    )
+                    hashtagButton(hashtag: hashtag)
                 }
             }
-            .padding(.horizontal)
         }
-        .padding(.vertical)
-        .background(AppTheme.secondaryBackground)
+        .padding(16)
+        .background(Color(.systemBackground))
         .cornerRadius(12)
-        .padding(.horizontal)
     }
     
-    private var selectedInCategory: Set<String> {
-        selectedHashtags.intersection(Set(category.hashtags))
-    }
-}
-
-// MARK: - Hashtag Button
-
-struct HashtagButton: View {
-    let hashtag: String
-    let isSelected: Bool
-    let onTap: () -> Void
-    
-    var body: some View {
-        Button(action: onTap) {
-            Text(hashtag)
-                .font(.caption)
-                .fontWeight(isSelected ? .semibold : .regular)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-                .background(isSelected ? AppTheme.primary : AppTheme.background)
-                .foregroundColor(isSelected ? .white : AppTheme.textPrimary)
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(
-                            isSelected ? AppTheme.primary : Color.gray.opacity(0.3),
-                            lineWidth: isSelected ? 2 : 1
-                        )
-                )
+    private func hashtagButton(hashtag: String) -> some View {
+        Button(hashtag) {
+            toggleHashtag(hashtag)
         }
-        .scaleEffect(isSelected ? 1.05 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
+        .font(.subheadline)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(selectedHashtags.contains(hashtag) ? AppTheme.primary : Color(.systemGray6))
+        .foregroundColor(selectedHashtags.contains(hashtag) ? .white : .primary)
+        .cornerRadius(8)
     }
-}
-
-// MARK: - Filter Button
-
-struct FilterButton: View {
-    let text: String
-    let isSelected: Bool
-    let onTap: () -> Void
     
-    var body: some View {
-        Button(action: onTap) {
+    private func selectedFilterChip(text: String, onRemove: @escaping () -> Void) -> some View {
+        HStack(spacing: 6) {
             Text(text)
                 .font(.caption)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isSelected ? AppTheme.primary : AppTheme.background)
-                .foregroundColor(isSelected ? .white : AppTheme.textPrimary)
-                .cornerRadius(16)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(isSelected ? AppTheme.primary : Color.gray.opacity(0.3), lineWidth: 1)
-                )
-        }
-        .scaleEffect(isSelected ? 1.05 : 1.0)
-        .animation(.easeInOut(duration: 0.1), value: isSelected)
-    }
-}
-
-// MARK: - Search Results Section
-
-struct SearchResultsSection: View {
-    @ObservedObject var viewModel: JobSearchViewModel
-    
-    var body: some View {
-        Group {
-            if viewModel.isLoading {
-                VStack {
-                    Spacer()
-                    LoadingView(message: "검색 중...")
-                    Spacer()
-                }
-            } else if let errorMessage = viewModel.errorMessage {
-                VStack {
-                    Spacer()
-                    ErrorView(
-                        message: errorMessage,
-                        retryAction: { viewModel.loadRecentJobs() }
-                    )
-                    Spacer()
-                }
-            } else if viewModel.searchResults.isEmpty && !viewModel.hasSearched {
-                // 검색 전 상태 - 최근 공고 표시
-                RecentJobsList(jobs: viewModel.recentJobs)
-            } else if viewModel.searchResults.isEmpty && viewModel.hasSearched {
-                VStack {
-                    Spacer()
-                    EmptyStateView(
-                        icon: "magnifyingglass",
-                        title: "검색 결과 없음",
-                        message: "선택한 해시태그와 일치하는 채용공고가 없습니다.\n다른 해시태그를 선택해보세요.",
-                        buttonTitle: "전체 공고 보기",
-                        buttonAction: {
-                            viewModel.clearSearch()
-                            viewModel.loadRecentJobs()
-                        }
-                    )
-                    Spacer()
-                }
-            } else {
-                // 검색 결과 표시
-                JobResultsList(jobs: viewModel.searchResults)
+            
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.caption2)
             }
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(AppTheme.primary)
+        .foregroundColor(.white)
+        .cornerRadius(16)
     }
-}
-
-// MARK: - Job Results List
-
-struct JobResultsList: View {
-    let jobs: [JobPostingResponse]
     
-    var body: some View {
-        List {
-            Section(header:
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                    Text("검색 결과")
-                    Spacer()
-                    Text("\(jobs.count)건")
-                        .foregroundColor(.gray)
-                }
-            ) {
-                ForEach(jobs) { job in
-                    NavigationLink(destination: JobDetailView(job: job)) {
-                        CompactJobRow(job: job)
-                    }
-                }
-            }
-        }
-        .listStyle(InsetGroupedListStyle())
-    }
-}
-
-// MARK: - Recent Jobs List
-
-struct RecentJobsList: View {
-    let jobs: [JobPostingResponse]
-    
-    var body: some View {
-        if jobs.isEmpty {
-            VStack {
-                Spacer()
-                EmptyStateView(
-                    icon: "briefcase",
-                    title: "채용공고 없음",
-                    message: "해시태그를 선택하여 원하는 채용공고를 찾아보세요.",
-                    buttonTitle: nil,
-                    buttonAction: nil
-                )
-                Spacer()
-            }
-        } else {
-            List {
-                Section(header:
-                    HStack {
-                        Image(systemName: "clock.fill")
-                            .foregroundColor(.blue)
-                        Text("최근 채용공고")
-                        Spacer()
-                        Text("\(jobs.count)건")
-                            .foregroundColor(.gray)
-                    }
-                ) {
-                    ForEach(jobs) { job in
-                        NavigationLink(destination: JobDetailView(job: job)) {
-                            CompactJobRow(job: job)
-                        }
-                    }
-                }
-            }
-            .listStyle(InsetGroupedListStyle())
-        }
-    }
-}
-
-// MARK: - Compact Job Row
-
-struct CompactJobRow: View {
-    let job: JobPostingResponse
-    
-    var body: some View {
+    private func cleanJobRow(job: JobPostingResponse) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // 제목과 회사
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(job.title)
                     .font(.headline)
-                    .lineLimit(1)
+                    .lineLimit(2)
                 
                 Text(job.companyName ?? "기업명 없음")
                     .font(.subheadline)
@@ -632,22 +411,27 @@ struct CompactJobRow: View {
             
             // 기본 정보
             HStack {
-                InfoTag(icon: "mappin", text: job.location, color: .blue)
-                InfoTag(icon: "person.fill", text: job.experienceLevel, color: .green)
+                Label(job.location, systemImage: "location")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Label(job.experienceLevel, systemImage: "briefcase")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 
                 Spacer()
                 
                 Text(job.createdAt.toShortDate())
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
             }
             
-            // 스킬 태그 (최대 4개)
+            // 스킬 태그
             if !job.requiredSkills.isEmpty {
                 let skills = job.requiredSkills.components(separatedBy: ",")
                     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
-                    .prefix(4)
+                    .prefix(3)
                 
                 HStack {
                     ForEach(Array(skills), id: \.self) { skill in
@@ -657,14 +441,83 @@ struct CompactJobRow: View {
                             .padding(.vertical, 2)
                             .background(AppTheme.primary.opacity(0.1))
                             .foregroundColor(AppTheme.primary)
-                            .cornerRadius(8)
+                            .cornerRadius(4)
                     }
-                    
                     Spacer()
                 }
             }
         }
         .padding(.vertical, 4)
+    }
+    
+    // MARK: - Computed Properties
+    
+    private var hasActiveFilters: Bool {
+        !selectedHashtags.isEmpty || !selectedLocation.isEmpty || !selectedExperience.isEmpty
+    }
+    
+    // MARK: - Methods
+    
+    private func setupInitialState() {
+        if let preselected = preselectedHashtag {
+            selectedHashtags.insert(preselected)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                performSearch()
+            }
+        } else {
+            viewModel.loadRecentJobs()
+        }
+    }
+    
+    private func toggleHashtag(_ hashtag: String) {
+        if selectedHashtags.contains(hashtag) {
+            selectedHashtags.remove(hashtag)
+        } else {
+            selectedHashtags.insert(hashtag)
+        }
+        performSearch()
+    }
+    
+    private func removeHashtag(_ hashtag: String) {
+        selectedHashtags.remove(hashtag)
+        performSearch()
+    }
+    
+    private func clearAllFilters() {
+        selectedHashtags.removeAll()
+        selectedLocation = ""
+        selectedExperience = ""
+        searchText = ""
+        viewModel.clearSearch()
+        viewModel.loadRecentJobs()
+    }
+    
+    private func performTextSearch() {
+        if !searchText.isEmpty {
+            let searchRequest = JobSearchRequest(
+                keyword: searchText,
+                location: selectedLocation.isEmpty ? nil : selectedLocation,
+                experienceLevel: selectedExperience.isEmpty ? nil : selectedExperience,
+                activeOnly: true
+            )
+            viewModel.searchJobs(request: searchRequest)
+        }
+    }
+    
+    private func performSearch() {
+        if selectedHashtags.isEmpty && selectedLocation.isEmpty && selectedExperience.isEmpty {
+            viewModel.clearSearch()
+            viewModel.loadRecentJobs()
+        } else {
+            let searchKeyword = selectedHashtags.isEmpty ? nil : Array(selectedHashtags).joined(separator: " ")
+            let searchRequest = JobSearchRequest(
+                keyword: searchKeyword,
+                location: selectedLocation.isEmpty ? nil : selectedLocation,
+                experienceLevel: selectedExperience.isEmpty ? nil : selectedExperience,
+                activeOnly: true
+            )
+            viewModel.searchJobs(request: searchRequest)
+        }
     }
 }
 
