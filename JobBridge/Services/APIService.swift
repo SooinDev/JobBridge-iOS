@@ -617,4 +617,9 @@ class APIService {
         
         return "비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해주세요."
     }
+    
+    func searchJobs(request: JobSearchRequest) async throws -> [JobPostingResponse] {
+        // 현재는 기존 getRecentJobs()를 사용
+        return try await getRecentJobs()
+    }
 }

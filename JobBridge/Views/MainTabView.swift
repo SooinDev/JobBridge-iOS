@@ -26,6 +26,15 @@ struct MainTabView: View {
             }
             .tag(1)
             
+            // 해시태그 검색 탭 (버튼 방식으로 변경)
+            NavigationView {
+                HashtagFilterSearchView()
+            }
+            .tabItem {
+                Label("해시태그", systemImage: "number")
+            }
+            .tag(2)
+            
             // 이력서 탭
             NavigationView {
                 ResumesView(viewModel: resumeViewModel)
@@ -33,7 +42,7 @@ struct MainTabView: View {
             .tabItem {
                 Label("이력서", systemImage: "doc.text.fill")
             }
-            .tag(2)
+            .tag(3)
             
             // 지원 내역 탭
             NavigationView {
@@ -42,7 +51,7 @@ struct MainTabView: View {
             .tabItem {
                 Label("지원내역", systemImage: "paperplane.fill")
             }
-            .tag(3)
+            .tag(4)
             
             // 프로필 탭
             NavigationView {
@@ -51,7 +60,7 @@ struct MainTabView: View {
             .tabItem {
                 Label("내 정보", systemImage: "person.fill")
             }
-            .tag(4)
+            .tag(5)
         }
         .accentColor(AppTheme.primary)
         .onAppear {
@@ -77,6 +86,7 @@ struct MainTabView: View {
     }
 }
 
+// 홈 뷰에서 해시태그 빠른 선택 섹션 업데이트
 struct HomeView: View {
     @ObservedObject var jobViewModel: JobViewModel
     @ObservedObject var resumeViewModel: ResumeViewModel
@@ -87,6 +97,9 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 24) {
                 // 헤더 (사용자 환영 메시지)
                 WelcomeHeaderView()
+                
+                // 인기 해시태그 빠른 선택 섹션
+                PopularHashtagsSection()
                 
                 // 빠른 액션 버튼들
                 QuickActionsView()
@@ -135,6 +148,71 @@ struct HomeView: View {
     }
 }
 
+// MARK: - Popular Hashtags Section
+
+struct PopularHashtagsSection: View {
+    // 인기 해시태그 (홈 화면용 - 축약 버전)
+    private let popularHashtags = [
+        HashtagItem(hashtag: "#자바", icon: "cup.and.saucer.fill", color: .orange),
+        HashtagItem(hashtag: "#Python", icon: "snake.fill", color: .green),
+        HashtagItem(hashtag: "#JavaScript", icon: "globe", color: .yellow),
+        HashtagItem(hashtag: "#Swift", icon: "swift", color: .blue),
+        HashtagItem(hashtag: "#React", icon: "atom", color: .cyan),
+        HashtagItem(hashtag: "#AI", icon: "brain.head.profile", color: .purple)
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("인기 해시태그")
+                    .heading3()
+                
+                Spacer()
+                
+                NavigationLink(destination: HashtagFilterSearchView()) {
+                    Text("전체 보기")
+                        .caption()
+                        .foregroundColor(AppTheme.primary)
+                }
+            }
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 12) {
+                ForEach(popularHashtags, id: \.hashtag) { item in
+                    NavigationLink(destination: HashtagFilterSearchView(preselectedHashtag: item.hashtag)) {
+                        VStack(spacing: 8) {
+                            Image(systemName: item.icon)
+                                .font(.system(size: 24))
+                                .foregroundColor(.white)
+                                .frame(width: 50, height: 50)
+                                .background(item.color)
+                                .cornerRadius(12)
+                            
+                            Text(item.hashtag)
+                                .caption()
+                                .foregroundColor(AppTheme.textPrimary)
+                        }
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(AppTheme.secondaryBackground)
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Hashtag Item Model
+
+struct HashtagItem {
+    let hashtag: String
+    let icon: String
+    let color: Color
+}
+
 struct WelcomeHeaderView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     
@@ -147,7 +225,7 @@ struct WelcomeHeaderView: View {
                 .heading1()
                 .foregroundColor(AppTheme.primary)
             
-            Text("오늘도 좋은 기회를 찾아보세요!")
+            Text("해시태그로 원하는 채용공고를 쉽게 찾아보세요!")
                 .body2()
         }
         .padding(.vertical, 8)
@@ -157,11 +235,23 @@ struct WelcomeHeaderView: View {
 struct QuickActionsView: View {
     var body: some View {
         HStack(spacing: 12) {
-            QuickActionButton(icon: "doc.text.magnifyingglass", title: "이력서 작성", destination: AnyView(AddResumeView(viewModel: ResumeViewModel())))
+            QuickActionButton(
+                icon: "doc.text.magnifyingglass",
+                title: "이력서 작성",
+                destination: AnyView(AddResumeView(viewModel: ResumeViewModel()))
+            )
             
-            QuickActionButton(icon: "briefcase.fill", title: "채용공고 검색", destination: AnyView(JobsView(viewModel: JobViewModel())))
+            QuickActionButton(
+                icon: "number",
+                title: "해시태그 검색",
+                destination: AnyView(HashtagFilterSearchView())
+            )
             
-            QuickActionButton(icon: "bell.fill", title: "추천공고", destination: AnyView(JobsView(viewModel: JobViewModel())))
+            QuickActionButton(
+                icon: "briefcase.fill",
+                title: "전체 공고",
+                destination: AnyView(JobsView(viewModel: JobViewModel()))
+            )
         }
     }
 }
@@ -217,8 +307,8 @@ struct RecommendedJobsSection: View {
                     icon: "briefcase",
                     title: "추천 공고 없음",
                     message: "맞춤 채용공고를 준비 중입니다.",
-                    buttonTitle: "채용공고 보기",
-                    buttonAction: { jobViewModel.loadRecentJobs() }
+                    buttonTitle: "해시태그로 검색",
+                    buttonAction: nil
                 )
                 .frame(height: 200)
             } else {
@@ -226,45 +316,7 @@ struct RecommendedJobsSection: View {
                     HStack(spacing: 16) {
                         ForEach(jobViewModel.jobs.prefix(5)) { job in
                             NavigationLink(destination: JobDetailView(job: job)) {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text(job.title)
-                                        .heading3()
-                                        .lineLimit(1)
-                                    
-                                    Text(job.companyName ?? "기업명 없음")
-                                        .body2()
-                                    
-                                    Divider()
-                                    
-                                    HStack {
-                                        Text(job.location)
-                                            .caption()
-                                        
-                                        Spacer()
-                                        
-                                        Text(job.experienceLevel)
-                                            .caption()
-                                    }
-                                    
-                                    if let matchRate = job.matchRate {
-                                        HStack {
-                                            Spacer()
-                                            Text("일치도: \(Int(matchRate * 100))%")
-                                                .caption()
-                                                .padding(.horizontal, 8)
-                                                .padding(.vertical, 4)
-                                                .background(Color.green.opacity(0.2))
-                                                .foregroundColor(.green)
-                                                .cornerRadius(20)
-                                        }
-                                    }
-                                }
-                                .padding()
-                                .frame(width: 280, height: 180)
-                                .background(AppTheme.secondaryBackground)
-                                .cornerRadius(12)
-                                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-                                .foregroundColor(AppTheme.textPrimary)
+                                JobCardView(job: job)
                             }
                         }
                     }
@@ -272,6 +324,74 @@ struct RecommendedJobsSection: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Job Card View
+
+struct JobCardView: View {
+    let job: JobPostingResponse
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(job.title)
+                .heading3()
+                .lineLimit(1)
+            
+            Text(job.companyName ?? "기업명 없음")
+                .body2()
+            
+            Divider()
+            
+            HStack {
+                Text(job.location)
+                    .caption()
+                
+                Spacer()
+                
+                Text(job.experienceLevel)
+                    .caption()
+            }
+            
+            // 스킬 태그 미리보기
+            if !job.requiredSkills.isEmpty {
+                let skills = job.requiredSkills.components(separatedBy: ",")
+                    .prefix(2)
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                
+                HStack {
+                    ForEach(skills, id: \.self) { skill in
+                        Text(skill.hasPrefix("#") ? skill : "#\(skill)")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(AppTheme.primary.opacity(0.1))
+                            .foregroundColor(AppTheme.primary)
+                            .cornerRadius(8)
+                    }
+                    Spacer()
+                }
+            }
+            
+            if let matchRate = job.matchRate {
+                HStack {
+                    Spacer()
+                    Text("일치도: \(Int(matchRate * 100))%")
+                        .caption()
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.green.opacity(0.2))
+                        .foregroundColor(.green)
+                        .cornerRadius(20)
+                }
+            }
+        }
+        .padding()
+        .frame(width: 280, height: 200)
+        .background(AppTheme.secondaryBackground)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .foregroundColor(AppTheme.textPrimary)
     }
 }
 
@@ -307,8 +427,8 @@ struct RecentApplicationsSection: View {
                 EmptyStateView(
                     icon: "paperplane",
                     title: "지원 내역 없음",
-                    message: "아직 지원한 공고가 없습니다.",
-                    buttonTitle: "채용공고 보기",
+                    message: "해시태그로 관심 공고를 찾아 지원해보세요.",
+                    buttonTitle: "해시태그 검색",
                     buttonAction: nil
                 )
                 .frame(height: 150)
@@ -359,21 +479,17 @@ struct RecentApplicationsSection: View {
     }
     
     private func formatDate(_ dateString: String) -> String {
-        // 다양한 날짜 형식을 처리할 수 있도록 여러 포맷터 준비
         let formatters: [DateFormatter] = [
-            // ISO 8601 형식 (yyyy-MM-dd'T'HH:mm:ss)
             {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
                 return formatter
             }(),
-            // yyyy-MM-dd HH:mm 형식
             {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "yyyy-MM-dd HH:mm"
                 return formatter
             }(),
-            // yyyy-MM-dd 형식
             {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "yyyy-MM-dd"
@@ -381,10 +497,8 @@ struct RecentApplicationsSection: View {
             }()
         ]
         
-        // 모든 포맷터로 파싱 시도
         for formatter in formatters {
             if let date = formatter.date(from: dateString) {
-                // 출력용 포맷터
                 let outputFormatter = DateFormatter()
                 outputFormatter.dateFormat = "yyyy년 M월 d일"
                 outputFormatter.locale = Locale(identifier: "ko_KR")
@@ -422,7 +536,7 @@ struct ResumesSection: View {
                 EmptyStateView(
                     icon: "doc.text",
                     title: "이력서 없음",
-                    message: "이력서를 작성하고 맞춤 채용공고를 추천받으세요.",
+                    message: "이력서를 작성하고 해시태그로 맞춤 공고를 찾아보세요.",
                     buttonTitle: "이력서 작성하기",
                     buttonAction: nil
                 )
