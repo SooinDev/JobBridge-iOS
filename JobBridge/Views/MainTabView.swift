@@ -151,10 +151,10 @@ struct HomeView: View {
 // MARK: - Popular Hashtags Section
 
 struct PopularHashtagsSection: View {
-    // 인기 해시태그 (홈 화면용 - 축약 버전)
+    // 인기 해시태그 (홈 화면용 - 축약 버전) - snake.fill을 laptopcomputer로 변경
     private let popularHashtags = [
-        HashtagItem(hashtag: "#자바", icon: "cup.and.saucer.fill", color: .orange),
-        HashtagItem(hashtag: "#Python", icon: "snake.fill", color: .green),
+        HashtagItem(hashtag: "#Java", icon: "cup.and.saucer.fill", color: .orange),
+        HashtagItem(hashtag: "#Python", icon: "laptopcomputer", color: .green),
         HashtagItem(hashtag: "#JavaScript", icon: "globe", color: .yellow),
         HashtagItem(hashtag: "#Swift", icon: "swift", color: .blue),
         HashtagItem(hashtag: "#React", icon: "atom", color: .cyan),
