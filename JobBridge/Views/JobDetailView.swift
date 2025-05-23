@@ -6,7 +6,10 @@ struct JobDetailView: View {
     @State private var showingSuccessAlert = false
     @State private var showingErrorAlert = false
     @State private var isScrolled = false
+    @State private var headerHeight: CGFloat = 0
+    @State private var animateContent = false
     @Environment(\.presentationMode) var presentationMode
+    @Environment(\.colorScheme) var colorScheme
     
     init(job: JobPostingResponse) {
         self._viewModel = StateObject(wrappedValue: JobDetailViewModel(job: job))
@@ -18,175 +21,107 @@ struct JobDetailView: View {
     
     var body: some View {
         ZStack {
-            // 배경색
-            AppTheme.background
-                .ignoresSafeArea()
+            // 다크모드 적응형 그라데이션 배경
+            LinearGradient(
+                gradient: Gradient(colors: colorScheme == .dark ? [
+                    Color(red: 0.05, green: 0.05, blue: 0.1),
+                    Color(red: 0.1, green: 0.1, blue: 0.15),
+                    Color(red: 0.08, green: 0.08, blue: 0.12)
+                ] : [
+                    Color(red: 0.98, green: 0.99, blue: 1.0),
+                    Color(red: 0.95, green: 0.97, blue: 1.0),
+                    Color.white
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
             
             if viewModel.isLoading && viewModel.job == nil {
-                LoadingView(message: "채용공고를 불러오는 중...")
+                ModernLoadingView()
             } else if let errorMessage = viewModel.errorMessage, viewModel.job == nil {
-                ErrorView(
+                ModernErrorView(
                     message: errorMessage,
                     retryAction: { viewModel.loadJob() }
                 )
             } else if let job = viewModel.job {
-                // 메인 컨텐츠
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        // 헤더 섹션
-                        VStack(alignment: .leading, spacing: 16) {
-                            // 회사 로고 (실제로는 네트워크 이미지를 사용할 수 있음)
-                            CompanyLogoView(companyName: job.companyName ?? "기업")
-                            
-                            // 제목 및 회사 정보
-                            Text(job.title)
-                                .heading2()
-                                .fixedSize(horizontal: false, vertical: true)
-                            
-                            Text(job.companyName ?? "기업명 없음")
-                                .heading3()
-                                .foregroundColor(AppTheme.primary)
-                            
-                            // 태그 목록
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 10) {
-                                    TagView(text: job.location, icon: "mappin.and.ellipse")
-                                    TagView(text: job.experienceLevel, icon: "person.fill")
-                                    TagView(text: job.position, icon: "briefcase.fill")
-                                    
-                                    if let matchRate = job.matchRate {
-                                        TagView(
-                                            text: "일치도: \(Int(matchRate * 100))%",
-                                            icon: "star.fill",
-                                            color: .green
-                                        )
+                GeometryReader { geometry in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            // 헤더 섹션 - 더 임팩트 있게
+                            ModernJobHeader(job: job)
+                                .background(
+                                    GeometryReader { headerGeometry in
+                                        Color.clear
+                                            .onAppear {
+                                                headerHeight = headerGeometry.size.height
+                                            }
                                     }
-                                }
-                            }
+                                )
                             
-                            Divider()
-                                .padding(.vertical, 8)
-                        }
-                        
-                        // 정보 섹션
-                        VStack(alignment: .leading, spacing: 8) {
-                            SectionHeaderView(title: "직무 정보")
-                            
-                            DetailGrid(items: [
-                                DetailItem(icon: "briefcase.fill", title: "직무", value: job.position),
-                                DetailItem(icon: "creditcard.fill", title: "급여", value: job.salary),
-                                DetailItem(icon: "calendar", title: "등록일", value: job.createdAt.toFormattedDate()),
-                                DetailItem(icon: "clock.fill", title: "마감일", value: job.deadline?.toFormattedDate() ?? "상시채용")
-                            ])
-                        }
-                        
-                        // 스킬 섹션
-                        VStack(alignment: .leading, spacing: 12) {
-                            SectionHeaderView(title: "필요 기술")
-                            
-                            SkillTagsView(skills: job.requiredSkills.components(separatedBy: ","))
-                        }
-                        
-                        // 직무 설명 섹션
-                        VStack(alignment: .leading, spacing: 12) {
-                            SectionHeaderView(title: "직무 설명")
-                            
-                            Text(job.description)
-                                .body1()
-                                .lineSpacing(5)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        
-                        // 회사 정보 섹션 (있는 경우)
-                        if let companyEmail = job.companyEmail {
-                            VStack(alignment: .leading, spacing: 12) {
-                                SectionHeaderView(title: "회사 정보")
+                            // 메인 컨텐츠
+                            VStack(spacing: 32) {
+                                // 핵심 정보 카드들
+                                ModernInfoCardsSection(job: job)
                                 
-                                HStack {
-                                    Image(systemName: "envelope.fill")
-                                        .foregroundColor(AppTheme.primary)
-                                    
-                                    Text(companyEmail)
-                                        .body1()
+                                // 스킬 및 요구사항
+                                ModernSkillsSection(job: job)
+                                
+                                // 상세 설명
+                                ModernDescriptionSection(job: job)
+                                
+                                // 회사 정보
+                                if job.companyEmail != nil {
+                                    ModernCompanyInfoSection(job: job)
                                 }
-                                .padding()
-                                .background(AppTheme.secondaryBackground)
-                                .cornerRadius(10)
+                                
+                                // 지원 상태 메시지
+                                if let errorMessage = viewModel.applicationErrorMessage {
+                                    ModernStatusMessage(message: errorMessage, isError: true)
+                                }
+                                
+                                // 하단 여백
+                                Spacer()
+                                    .frame(height: 120)
                             }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 20)
                         }
-                        
-                        // 지원 상태 메시지 (있는 경우)
-                        if let errorMessage = viewModel.applicationErrorMessage {
-                            Text(errorMessage)
-                                .foregroundColor(AppTheme.error)
-                                .font(.footnote)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding()
-                                .background(AppTheme.error.opacity(0.1))
-                                .cornerRadius(10)
-                        }
-                        
-                        // 추가 공간 (하단 지원 버튼을 가리지 않게)
-                        Spacer()
-                            .frame(height: 80)
                     }
-                    .padding(.horizontal)
-                    .padding(.top)
+                    .opacity(animateContent ? 1 : 0)
+                    .offset(y: animateContent ? 0 : 30)
+                    .animation(.easeOut(duration: 0.8).delay(0.2), value: animateContent)
                 }
                 
-                // 하단 고정 지원 버튼
+                // 하단 고정 지원 버튼 - 플로팅 스타일
                 VStack {
                     Spacer()
                     
-                    // 지원 버튼
-                    Button(action: {
-                        // 이미 지원한 경우 경고 표시
-                        if viewModel.isApplied {
-                            viewModel.applicationErrorMessage = "이미 지원한 공고입니다."
-                        } else {
-                            // 처음 지원하는 경우 지원 확인 다이얼로그 표시
-                            showingApplyAlert = true
-                        }
-                    }) {
-                        HStack {
-                            // 지원 확인 중인 경우 로딩 아이콘 표시
-                            if viewModel.isCheckingApplication {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .padding(.trailing, 5)
-                                Text("확인 중...")
+                    ModernFloatingApplyButton(
+                        isApplied: viewModel.isApplied,
+                        isLoading: viewModel.isLoading,
+                        isCheckingApplication: viewModel.isCheckingApplication,
+                        onApplyTap: {
+                            if viewModel.isApplied {
+                                viewModel.applicationErrorMessage = "이미 지원한 공고입니다."
                             } else {
-                                Image(systemName: viewModel.isApplied ? "checkmark.circle.fill" : "paperplane.fill")
-                                    .font(.system(size: 18))
-                                Text(viewModel.isApplied ? "지원 완료" : "지원하기")
-                                    .fontWeight(.semibold)
+                                showingApplyAlert = true
                             }
                         }
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(viewModel.isApplied ? Color.gray : AppTheme.primary)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                    }
-                    .padding()
-                    .background(
-                        Rectangle()
-                            .fill(Color.white)
-                            .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: -3)
                     )
-                    .disabled(viewModel.isLoading || viewModel.isCheckingApplication)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
                 }
             }
         }
-        .navigationTitle("채용공고 상세")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarItems(leading: BackButton())
+        .navigationBarHidden(true)
         .onAppear {
-            // 화면이 나타날 때마다 지원 여부 다시 확인
             viewModel.checkIfAlreadyApplied()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                animateContent = true
+            }
         }
-        // 지원 확인 알림
+        // 알림 처리
         .alert(isPresented: $showingApplyAlert) {
             Alert(
                 title: Text("지원 확인"),
@@ -203,13 +138,11 @@ struct JobDetailView: View {
                 secondaryButton: .cancel(Text("취소"))
             )
         }
-        // 지원 성공 알림
         .alert("지원 완료", isPresented: $showingSuccessAlert) {
             Button("확인", role: .cancel) { }
         } message: {
             Text("채용공고 지원이 완료되었습니다.")
         }
-        // 지원 실패 알림
         .alert("지원 실패", isPresented: $showingErrorAlert) {
             Button("확인", role: .cancel) { }
         } message: {
@@ -218,134 +151,918 @@ struct JobDetailView: View {
     }
 }
 
-// MARK: - 컴포넌트
-struct BackButton: View {
+// MARK: - Modern Components
+
+struct ModernJobHeader: View {
+    let job: JobPostingResponse
     @Environment(\.presentationMode) var presentationMode
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        Button(action: {
-            presentationMode.wrappedValue.dismiss()
-        }) {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(AppTheme.primary)
-                .padding(8)
-                .background(Circle().fill(AppTheme.secondaryBackground))
-        }
-    }
-}
-
-struct CompanyLogoView: View {
-    let companyName: String
-    
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(AppTheme.primary.opacity(0.1))
-                .frame(width: 70, height: 70)
+        VStack(spacing: 0) {
+            // 상단 네비게이션
+            HStack {
+                Button(action: {
+                    presentationMode.wrappedValue.dismiss()
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 44, height: 44)
+                            .overlay(
+                                Circle()
+                                    .stroke(colorScheme == .dark ?
+                                           Color.white.opacity(0.1) :
+                                           Color.black.opacity(0.05), lineWidth: 1)
+                            )
+                        
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                    }
+                }
+                
+                Spacer()
+                
+                Button(action: {}) {
+                    ZStack {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 44, height: 44)
+                            .overlay(
+                                Circle()
+                                    .stroke(colorScheme == .dark ?
+                                           Color.white.opacity(0.1) :
+                                           Color.black.opacity(0.05), lineWidth: 1)
+                            )
+                        
+                        Image(systemName: "heart")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 10)
             
-            Text(String(companyName.prefix(1)))
-                .font(.system(size: 28, weight: .bold))
-                .foregroundColor(AppTheme.primary)
+            // 메인 헤더 컨텐츠
+            VStack(spacing: 24) {
+                // 회사 로고 및 정보
+                HStack(spacing: 20) {
+                    // 3D 스타일 회사 로고
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: colorScheme == .dark ? [
+                                        AppTheme.primary.opacity(0.9),
+                                        AppTheme.primary.opacity(0.7)
+                                    ] : [
+                                        AppTheme.primary.opacity(0.8),
+                                        AppTheme.primary
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 80, height: 80)
+                            .shadow(color: AppTheme.primary.opacity(colorScheme == .dark ? 0.4 : 0.3),
+                                   radius: 10, x: 0, y: 8)
+                        
+                        Text(String((job.companyName ?? "C").prefix(1)))
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(job.title)
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                            .lineLimit(2)
+                        
+                        Text(job.companyName ?? "기업명 없음")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(AppTheme.primary)
+                        
+                        // 인증 배지 (예시)
+                        HStack(spacing: 8) {
+                            ModernBadge(text: "인증기업", color: .green, icon: "checkmark.shield")
+                            ModernBadge(text: "신속채용", color: .orange, icon: "bolt")
+                        }
+                    }
+                    
+                    Spacer()
+                }
+                
+                // 매치 정보 (있는 경우)
+                if let matchRate = job.matchRate {
+                    ModernMatchCard(matchRate: matchRate)
+                }
+                
+                // 기본 태그들
+                ModernTagsRow(job: job)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 30)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 30))
+            .overlay(
+                RoundedRectangle(cornerRadius: 30)
+                    .stroke(colorScheme == .dark ?
+                           Color.white.opacity(0.1) :
+                           Color.black.opacity(0.05), lineWidth: 1)
+            )
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
         }
     }
 }
 
-struct TagView: View {
+struct ModernBadge: View {
     let text: String
+    let color: Color
     let icon: String
-    var color: Color = AppTheme.primary
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 12))
+                .font(.system(size: 10, weight: .bold))
             
             Text(text)
-                .font(.system(size: 13))
+                .font(.system(size: 11, weight: .bold))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(color.opacity(0.1))
-        .foregroundColor(color)
-        .cornerRadius(16)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            colorScheme == .dark ?
+            color.opacity(0.25) :
+            color.opacity(0.15)
+        )
+        .foregroundColor(
+            colorScheme == .dark ?
+            color.opacity(0.9) :
+            color
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(
+                    colorScheme == .dark ?
+                    color.opacity(0.3) :
+                    color.opacity(0.2),
+                    lineWidth: 0.5
+                )
+        )
     }
 }
 
-struct SectionHeaderView: View {
-    let title: String
+struct ModernMatchCard: View {
+    let matchRate: Double
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        HStack {
-            Text(title)
-                .heading3()
+        HStack(spacing: 16) {
+            // 원형 진행률 표시
+            ZStack {
+                Circle()
+                    .stroke(
+                        colorScheme == .dark ?
+                        Color.green.opacity(0.3) :
+                        Color.green.opacity(0.2),
+                        lineWidth: 8
+                    )
+                    .frame(width: 60, height: 60)
+                
+                Circle()
+                    .trim(from: 0, to: matchRate)
+                    .stroke(
+                        colorScheme == .dark ?
+                        Color.green.opacity(0.9) :
+                        Color.green,
+                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                    )
+                    .frame(width: 60, height: 60)
+                    .rotationEffect(.degrees(-90))
+                
+                Text("\(Int(matchRate * 100))")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(
+                        colorScheme == .dark ?
+                        Color.green.opacity(0.9) :
+                        Color.green
+                    )
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("매칭률")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(colorScheme == .dark ? .gray : .secondary)
+                
+                Text("당신과 \(Int(matchRate * 100))% 일치")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                Text("높은 적합도로 합격 가능성이 높습니다")
+                    .font(.system(size: 12))
+                    .foregroundColor(colorScheme == .dark ? .gray : .secondary)
+            }
             
             Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    colorScheme == .dark ?
+                    Color.green.opacity(0.1) :
+                    Color.green.opacity(0.05)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            colorScheme == .dark ?
+                            Color.green.opacity(0.3) :
+                            Color.green.opacity(0.2),
+                            lineWidth: 1
+                        )
+                )
+        )
     }
 }
 
-struct DetailItem: Identifiable {
-    let id = UUID()
-    let icon: String
-    let title: String
-    let value: String
-}
-
-struct DetailGrid: View {
-    let items: [DetailItem]
-    
-    var body: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 16),
-            GridItem(.flexible(), spacing: 16)
-        ], spacing: 16) {
-            ForEach(items) { item in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: item.icon)
-                            .foregroundColor(AppTheme.primary)
-                            .frame(width: 20)
-                        
-                        Text(item.title)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(AppTheme.textSecondary)
-                    }
-                    
-                    Text(item.value)
-                        .body1()
-                        .lineLimit(1)
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.secondaryBackground)
-                .cornerRadius(10)
-            }
-        }
-    }
-}
-
-struct SkillTagsView: View {
-    let skills: [String]
+struct ModernTagsRow: View {
+    let job: JobPostingResponse
     
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(skills.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }, id: \.self) { skill in
-                    Text(skill.trimmingCharacters(in: .whitespacesAndNewlines))
-                        .font(.system(size: 14))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundColor(AppTheme.primary)
-                        .cornerRadius(20)
-                }
+            HStack(spacing: 12) {
+                ModernInfoTag(icon: "location.fill", text: job.location, color: .blue)
+                ModernInfoTag(icon: "briefcase.fill", text: job.experienceLevel, color: .purple)
+                ModernInfoTag(icon: "person.fill", text: job.position, color: .orange)
+                ModernInfoTag(icon: "calendar", text: formatDateShort(job.createdAt), color: .gray)
             }
-            .padding(.vertical, 4)
+            .padding(.horizontal, 20)
+        }
+    }
+    
+    private func formatDateShort(_ dateString: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        if let date = formatter.date(from: dateString) {
+            formatter.dateFormat = "M/d"
+            return formatter.string(from: date)
+        }
+        return dateString
+    }
+}
+
+struct ModernInfoTag: View {
+    let icon: String
+    let text: String
+    let color: Color
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(
+                    colorScheme == .dark ?
+                    color.opacity(0.9) :
+                    color
+                )
+            
+            Text(text)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(
+                    colorScheme == .dark ?
+                    Color.white.opacity(0.1) :
+                    Color.black.opacity(0.05),
+                    lineWidth: 1
+                )
+        )
+    }
+}
+
+struct ModernInfoCardsSection: View {
+    let job: JobPostingResponse
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("채용 정보")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 16),
+                GridItem(.flexible(), spacing: 16)
+            ], spacing: 16) {
+                ModernInfoCard(
+                    icon: "briefcase.fill",
+                    title: "직무",
+                    value: job.position,
+                    color: .blue,
+                    gradient: colorScheme == .dark ?
+                        [.blue.opacity(0.2), .blue.opacity(0.1)] :
+                        [.blue.opacity(0.1), .blue.opacity(0.05)]
+                )
+                
+                ModernInfoCard(
+                    icon: "dollarsign.circle.fill",
+                    title: "급여",
+                    value: job.salary,
+                    color: .green,
+                    gradient: colorScheme == .dark ?
+                        [.green.opacity(0.2), .green.opacity(0.1)] :
+                        [.green.opacity(0.1), .green.opacity(0.05)]
+                )
+                
+                ModernInfoCard(
+                    icon: "clock.fill",
+                    title: "마감일",
+                    value: job.deadline?.toFormattedDate() ?? "상시채용",
+                    color: .orange,
+                    gradient: colorScheme == .dark ?
+                        [.orange.opacity(0.2), .orange.opacity(0.1)] :
+                        [.orange.opacity(0.1), .orange.opacity(0.05)]
+                )
+                
+                ModernInfoCard(
+                    icon: "calendar.badge.plus",
+                    title: "등록일",
+                    value: job.createdAt.toFormattedDate(),
+                    color: .purple,
+                    gradient: colorScheme == .dark ?
+                        [.purple.opacity(0.2), .purple.opacity(0.1)] :
+                        [.purple.opacity(0.1), .purple.opacity(0.05)]
+                )
+            }
         }
     }
 }
+
+struct ModernInfoCard: View {
+    let icon: String
+    let title: String
+    let value: String
+    let color: Color
+    let gradient: [Color]
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                ZStack {
+                    Circle()
+                        .fill(
+                            colorScheme == .dark ?
+                            color.opacity(0.3) :
+                            color.opacity(0.2)
+                        )
+                        .frame(width: 40, height: 40)
+                    
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(
+                            colorScheme == .dark ?
+                            color.opacity(0.9) :
+                            color
+                        )
+                }
+                
+                Spacer()
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(colorScheme == .dark ? .gray : .secondary)
+                
+                Text(value)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .lineLimit(2)
+            }
+        }
+        .padding(20)
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: gradient),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(
+                    colorScheme == .dark ?
+                    color.opacity(0.2) :
+                    color.opacity(0.1),
+                    lineWidth: 1
+                )
+        )
+    }
+}
+
+struct ModernSkillsSection: View {
+    let job: JobPostingResponse
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("필요 기술")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    Text("이 포지션에서 사용하는 기술 스택")
+                        .font(.system(size: 14))
+                        .foregroundColor(colorScheme == .dark ? .gray : .secondary)
+                }
+                
+                Spacer()
+            }
+            
+            ModernSkillTags(skills: job.requiredSkills.components(separatedBy: ","))
+        }
+        .padding(24)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(
+                    colorScheme == .dark ?
+                    Color.white.opacity(0.1) :
+                    Color.black.opacity(0.05),
+                    lineWidth: 1
+                )
+        )
+    }
+}
+
+struct ModernSkillTags: View {
+    let skills: [String]
+    @Environment(\.colorScheme) var colorScheme
+    
+    private var skillColors: [Color] {
+        colorScheme == .dark ?
+        [.blue, .green, .purple, .orange, .pink, .indigo] :
+        [.blue, .green, .purple, .orange, .pink, .indigo]
+    }
+    
+    var body: some View {
+        LazyVGrid(columns: [
+            GridItem(.adaptive(minimum: 100), spacing: 12)
+        ], spacing: 12) {
+            ForEach(Array(skills.enumerated()), id: \.offset) { index, skill in
+                let trimmedSkill = skill.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedSkill.isEmpty {
+                    ModernSkillTag(
+                        skill: trimmedSkill,
+                        color: skillColors[index % skillColors.count]
+                    )
+                }
+            }
+        }
+    }
+}
+
+struct ModernSkillTag: View {
+    let skill: String
+    let color: Color
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(
+                    colorScheme == .dark ?
+                    color.opacity(0.8) :
+                    color
+                )
+                .frame(width: 8, height: 8)
+            
+            Text(skill.hasPrefix("#") ? skill : "#\(skill)")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            colorScheme == .dark ?
+            color.opacity(0.15) :
+            color.opacity(0.1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(
+                    colorScheme == .dark ?
+                    color.opacity(0.4) :
+                    color.opacity(0.3),
+                    lineWidth: 1
+                )
+        )
+    }
+}
+
+struct ModernDescriptionSection: View {
+    let job: JobPostingResponse
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("상세 내용")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    Text("업무 내용 및 요구사항")
+                        .font(.system(size: 14))
+                        .foregroundColor(colorScheme == .dark ? .gray : .secondary)
+                }
+                
+                Spacer()
+            }
+            
+            Text(job.description)
+                .font(.system(size: 16, weight: .regular))
+                .lineSpacing(6)
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+        }
+        .padding(24)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(
+                    colorScheme == .dark ?
+                    Color.white.opacity(0.1) :
+                    Color.black.opacity(0.05),
+                    lineWidth: 1
+                )
+        )
+    }
+}
+
+struct ModernCompanyInfoSection: View {
+    let job: JobPostingResponse
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("회사 정보")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    Text("채용 담당자 연락처")
+                        .font(.system(size: 14))
+                        .foregroundColor(colorScheme == .dark ? .gray : .secondary)
+                }
+                
+                Spacer()
+            }
+            
+            if let companyEmail = job.companyEmail {
+                HStack(spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                colorScheme == .dark ?
+                                AppTheme.primary.opacity(0.3) :
+                                AppTheme.primary.opacity(0.2)
+                            )
+                            .frame(width: 50, height: 50)
+                        
+                        Image(systemName: "envelope.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(
+                                colorScheme == .dark ?
+                                AppTheme.primary.opacity(0.9) :
+                                AppTheme.primary
+                            )
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("이메일")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(colorScheme == .dark ? .gray : .secondary)
+                        
+                        Text(companyEmail)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                    }
+                    
+                    Spacer()
+                }
+                .padding(20)
+                .background(
+                    colorScheme == .dark ?
+                    AppTheme.primary.opacity(0.1) :
+                    AppTheme.primary.opacity(0.05)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            colorScheme == .dark ?
+                            AppTheme.primary.opacity(0.3) :
+                            AppTheme.primary.opacity(0.2),
+                            lineWidth: 1
+                        )
+                )
+            }
+        }
+        .padding(24)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(
+                    colorScheme == .dark ?
+                    Color.white.opacity(0.1) :
+                    Color.black.opacity(0.05),
+                    lineWidth: 1
+                )
+        )
+    }
+}
+
+struct ModernStatusMessage: View {
+    let message: String
+    let isError: Bool
+    @Environment(\.colorScheme) var colorScheme
+    
+    // 복잡한 표현식을 계산 프로퍼티로 분리
+    private var iconColor: Color {
+        let baseColor = isError ? Color.red : Color.green
+        return colorScheme == .dark ?
+            baseColor.opacity(0.9) :
+            baseColor
+    }
+    
+    private var textColor: Color {
+        let baseColor = isError ? Color.red : Color.green
+        return colorScheme == .dark ?
+            baseColor.opacity(0.9) :
+            baseColor
+    }
+    
+    private var backgroundColor: Color {
+        let baseColor = isError ? Color.red : Color.green
+        let opacity = colorScheme == .dark ? 0.15 : 0.1
+        return baseColor.opacity(opacity)
+    }
+    
+    private var strokeColor: Color {
+        let baseColor = isError ? Color.red : Color.green
+        let opacity = colorScheme == .dark ? 0.4 : 0.3
+        return baseColor.opacity(opacity)
+    }
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .font(.system(size: 20))
+                .foregroundColor(iconColor)
+            
+            Text(message)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(textColor)
+        }
+        .padding(20)
+        .background(backgroundColor)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(strokeColor, lineWidth: 1)
+        )
+    }
+}
+
+struct ModernFloatingApplyButton: View {
+    let isApplied: Bool
+    let isLoading: Bool
+    let isCheckingApplication: Bool
+    let onApplyTap: () -> Void
+    @Environment(\.colorScheme) var colorScheme
+    
+    // 복잡한 표현식을 계산 프로퍼티로 분리
+    private var buttonGradientColors: [Color] {
+        if isApplied {
+            return colorScheme == .dark ?
+                [Color.gray.opacity(0.8), Color.gray.opacity(0.6)] :
+                [Color.gray, Color.gray.opacity(0.8)]
+        } else {
+            return colorScheme == .dark ?
+                [AppTheme.primary.opacity(0.9), AppTheme.primary.opacity(0.7)] :
+                [AppTheme.primary, AppTheme.primary.opacity(0.8)]
+        }
+    }
+    
+    private var shadowColor: Color {
+        let baseColor = isApplied ? Color.gray : AppTheme.primary
+        let opacity = colorScheme == .dark ? 0.5 : 0.4
+        return baseColor.opacity(opacity)
+    }
+    
+    var body: some View {
+        Button(action: onApplyTap) {
+            HStack(spacing: 12) {
+                if isCheckingApplication {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    
+                    Text("확인 중...")
+                        .font(.system(size: 17, weight: .semibold))
+                } else {
+                    Image(systemName: isApplied ? "checkmark.circle.fill" : "paperplane.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                    
+                    Text(isApplied ? "지원 완료" : "지원하기")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: buttonGradientColors),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 28))
+            .shadow(
+                color: shadowColor,
+                radius: 15,
+                x: 0,
+                y: 8
+            )
+            .scaleEffect(isLoading ? 0.95 : 1.0)
+            .animation(.spring(response: 0.3), value: isLoading)
+        }
+        .disabled(isLoading || isCheckingApplication)
+    }
+}
+
+struct ModernLoadingView: View {
+    @State private var rotation = 0.0
+    @Environment(\.colorScheme) var colorScheme
+    
+    // 복잡한 표현식을 계산 프로퍼티로 분리
+    private var strokeColor: Color {
+        let opacity = colorScheme == .dark ? 0.3 : 0.2
+        return AppTheme.primary.opacity(opacity)
+    }
+    
+    private var trimStrokeColor: Color {
+        let opacity = colorScheme == .dark ? 0.9 : 1.0
+        return AppTheme.primary.opacity(opacity)
+    }
+    
+    private var textColor: Color {
+        colorScheme == .dark ? .gray : .secondary
+    }
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .stroke(strokeColor, lineWidth: 4)
+                    .frame(width: 60, height: 60)
+                
+                Circle()
+                    .trim(from: 0, to: 0.3)
+                    .stroke(
+                        trimStrokeColor,
+                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                    )
+                    .frame(width: 60, height: 60)
+                    .rotationEffect(.degrees(rotation))
+                    .animation(.linear(duration: 1.0).repeatForever(autoreverses: false), value: rotation)
+            }
+            
+            Text("채용공고를 불러오는 중...")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(textColor)
+        }
+        .onAppear {
+            rotation = 360
+        }
+    }
+}
+
+struct ModernErrorView: View {
+    let message: String
+    let retryAction: () -> Void
+    @Environment(\.colorScheme) var colorScheme
+    
+    // 복잡한 표현식을 계산 프로퍼티로 분리
+    private var circleBackgroundColor: Color {
+        colorScheme == .dark ?
+            Color.red.opacity(0.15) :
+            Color.red.opacity(0.1)
+    }
+    
+    private var iconColor: Color {
+        colorScheme == .dark ?
+            Color.red.opacity(0.9) :
+            .red
+    }
+    
+    private var titleColor: Color {
+        colorScheme == .dark ? .white : .black
+    }
+    
+    private var messageColor: Color {
+        colorScheme == .dark ? .gray : .secondary
+    }
+    
+    private var buttonGradientColors: [Color] {
+        colorScheme == .dark ?
+            [AppTheme.primary.opacity(0.9), AppTheme.primary.opacity(0.7)] :
+            [AppTheme.primary, AppTheme.primary.opacity(0.8)]
+    }
+    
+    private var buttonShadowColor: Color {
+        let opacity = colorScheme == .dark ? 0.5 : 0.3
+        return AppTheme.primary.opacity(opacity)
+    }
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            ZStack {
+                Circle()
+                    .fill(circleBackgroundColor)
+                    .frame(width: 80, height: 80)
+                
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 32))
+                    .foregroundColor(iconColor)
+            }
+            
+            VStack(spacing: 8) {
+                Text("오류가 발생했습니다")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(titleColor)
+                
+                Text(message)
+                    .font(.system(size: 16))
+                    .foregroundColor(messageColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            
+            Button(action: retryAction) {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 16, weight: .semibold))
+                    
+                    Text("다시 시도")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: buttonGradientColors),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .shadow(
+                    color: buttonShadowColor,
+                    radius: 10,
+                    x: 0,
+                    y: 5
+                )
+            }
+        }
+        .padding()
+    }
+}
+
+// MARK: - Extensions
 
 extension String {
     func toFormattedDate() -> String {
@@ -358,27 +1075,5 @@ extension String {
         }
         
         return self
-    }
-}
-
-struct JobDetailView_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationView {
-            JobDetailView(job: JobPostingResponse(
-                id: 1,
-                title: "iOS 개발자 (경력 3년 이상)",
-                description: "당사는 혁신적인 모바일 앱을 개발하는 기업으로, 경험 많은 iOS 개발자를 찾고 있습니다.",
-                position: "iOS 개발자",
-                requiredSkills: "Swift, SwiftUI, Objective-C, UIKit",
-                experienceLevel: "경력 3년 이상",
-                location: "서울시 강남구",
-                salary: "6000만원 이상",
-                deadline: "2023-06-30 23:59",
-                companyName: "테크 이노베이션",
-                companyEmail: "recruit@techinnovation.com",
-                createdAt: "2023-05-01 09:00",
-                matchRate: 0.85
-            ))
-        }
     }
 }
