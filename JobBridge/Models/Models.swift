@@ -1,48 +1,28 @@
 import Foundation
 
-// 백엔드의 MyApplicationDto와 정확히 일치하도록 수정
+// MARK: - 지원 관련 모델
 struct ApplicationResponse: Codable, Identifiable {
-    let jobPostingId: Int  // 백엔드는 Long이지만 Swift에서는 Int로 변환
+    let jobPostingId: Int
     let jobTitle: String
     let companyName: String
-    let appliedAt: String  // LocalDateTime이 JSON으로 변환된 형식
+    let appliedAt: String
     
-    // Identifiable 프로토콜을 위한 계산 프로퍼티
     var id: Int { jobPostingId }
     
-    // CodingKeys 정의 - 백엔드 필드명과 정확히 일치
     private enum CodingKeys: String, CodingKey {
         case jobPostingId
         case jobTitle
         case companyName
         case appliedAt
     }
-    
-    // 커스텀 디코더 - 날짜 형식 변환 문제가 있을 경우 주석 해제하여 사용
-    /*
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        
-        // 필수 필드 디코딩
-        jobPostingId = try container.decode(Int.self, forKey: .jobPostingId)
-        jobTitle = try container.decode(String.self, forKey: .jobTitle)
-        companyName = try container.decode(String.self, forKey: .companyName)
-        
-        // 날짜 필드 처리 - 원본 문자열 그대로 저장
-        appliedAt = try container.decode(String.self, forKey: .appliedAt)
-        
-        print("🟢 디코딩 성공: \(jobTitle), 날짜: \(appliedAt)")
-    }
-    */
 }
 
-// 로그인 요청 모델
+// MARK: - 로그인 관련 모델
 struct LoginRequest: Codable {
     let email: String
     let pw: String
 }
 
-// 로그인 응답 모델
 struct LoginResponse: Codable {
     let token: String
     let name: String
@@ -50,7 +30,7 @@ struct LoginResponse: Codable {
     let userType: String
 }
 
-// 회원가입 요청 모델
+// MARK: - 회원가입 관련 모델
 struct SignupRequest: Codable {
     let pw: String
     let name: String
@@ -61,7 +41,7 @@ struct SignupRequest: Codable {
     let userType: String // "INDIVIDUAL" 또는 "COMPANY"
 }
 
-// 이력서 응답 모델
+// MARK: - 이력서 관련 모델
 struct ResumeResponse: Codable, Identifiable {
     let id: Int
     let title: String
@@ -72,13 +52,12 @@ struct ResumeResponse: Codable, Identifiable {
     var matchRate: Double?
 }
 
-// 이력서 생성/수정 요청 모델
 struct ResumeRequest: Codable {
     let title: String
     let content: String
 }
 
-// 채용공고 응답 모델
+// MARK: - 🔥 채용공고 관련 모델 (매칭 기능 포함)
 struct JobPostingResponse: Codable, Identifiable {
     let id: Int
     let title: String
@@ -92,13 +71,67 @@ struct JobPostingResponse: Codable, Identifiable {
     let companyName: String?
     let companyEmail: String?
     let createdAt: String
-    var matchRate: Double?
+    var matchRate: Double? // 🔥 매칭률 추가
 }
 
-// 채용공고 검색 요청 모델
+// MARK: - 🔥 매칭 관련 모델 (단일 정의)
+struct MatchingJobResponse: Codable, Identifiable {
+    let id: Int
+    let title: String
+    let description: String
+    let createdAt: String
+    let updatedAt: String
+    let matchRate: Double
+}
+
+struct CareerRecommendationResponse: Codable {
+    let recommendations: [String]
+}
+
+// MARK: - 채용공고 검색 관련 모델
 struct JobSearchRequest: Codable {
     let keyword: String?
     let location: String?
     let experienceLevel: String?
     let activeOnly: Bool?
+}
+
+// MARK: - 이메일 인증 관련 모델
+struct EmailRequest: Codable {
+    let email: String
+}
+
+struct VerificationRequest: Codable {
+    let email: String
+    let code: String
+}
+
+// MARK: - 🔥 기업용 채용공고 관리 모델
+struct JobPostingRequest: Codable {
+    let title: String
+    let description: String
+    let position: String
+    let requiredSkills: String
+    let experienceLevel: String
+    let location: String
+    let salary: String
+    let deadline: String // ISO 형식 날짜
+}
+
+// MARK: - 알림 관련 모델
+struct NotificationResponse: Codable, Identifiable {
+    let id: Int
+    let senderId: Int
+    let receiverId: Int
+    let jobPostingId: Int
+    let message: String
+    let isRead: Bool
+    let createdAt: String
+}
+
+// MARK: - Equatable 구현
+extension JobPostingResponse: Equatable {
+    static func == (lhs: JobPostingResponse, rhs: JobPostingResponse) -> Bool {
+        return lhs.id == rhs.id
+    }
 }
