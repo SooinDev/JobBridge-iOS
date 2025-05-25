@@ -182,11 +182,8 @@ struct ResumeDetailView: View {
             animateMatchingButton = true
         }
         
-        if MatchingDebugSettings.useMockData {
-            jobViewModel.loadMatchingJobsWithFallback(resumeId: resume.id)
-        } else {
-            jobViewModel.loadMatchingJobs(resumeId: resume.id)
-        }
+        // 🔥 실제 AI API 호출
+        jobViewModel.loadMatchingJobs(resumeId: resume.id)
         
         showingMatchingJobs = true
         

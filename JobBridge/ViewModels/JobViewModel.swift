@@ -60,7 +60,7 @@ class JobViewModel: ObservableObject {
         }
     }
     
-    // MARK: - 🔥 핵심: 이력서 기반 매칭 채용공고 로드 (실제 API)
+    // MARK: - 🔥 핵심: 이력서 기반 매칭 채용공고 로드 (실제 AI API만 사용)
     func loadMatchingJobs(resumeId: Int) {
         isLoading = true
         errorMessage = nil
@@ -68,10 +68,11 @@ class JobViewModel: ObservableObject {
         
         Task {
             do {
-                print("🔵 매칭 채용공고 요청 시작 - resumeId: \(resumeId)")
+                print("🔵 실제 AI 매칭 API 호출 - resumeId: \(resumeId)")
                 let fetchedJobs: [MatchingJobResponse] = try await apiService.getMatchingJobsForResume(resumeId: resumeId)
+                
                 DispatchQueue.main.async {
-                    print("🟢 매칭 채용공고 \(fetchedJobs.count)개 로드 완료")
+                    print("🟢 AI 매칭 결과 \(fetchedJobs.count)개 로드 완료")
                     
                     // MatchingJobResponse를 JobPostingResponse로 변환
                     self.matchingJobs = fetchedJobs.map { matchingJob in
@@ -79,13 +80,13 @@ class JobViewModel: ObservableObject {
                             id: matchingJob.id,
                             title: matchingJob.title,
                             description: matchingJob.description,
-                            position: "개발자", // 실제 API에서는 백엔드에서 제공
-                            requiredSkills: "Swift, iOS, SwiftUI", // 실제 API에서는 백엔드에서 제공
-                            experienceLevel: "3-5년", // 실제 API에서는 백엔드에서 제공
-                            location: "서울", // 실제 API에서는 백엔드에서 제공
-                            salary: "4000-6000만원", // 실제 API에서는 백엔드에서 제공
+                            position: "개발자", // 실제 API에서는 백엔드에서 제공해야 함
+                            requiredSkills: "Swift, iOS, SwiftUI", // 실제 API에서는 백엔드에서 제공해야 함
+                            experienceLevel: "3-5년", // 실제 API에서는 백엔드에서 제공해야 함
+                            location: "서울", // 실제 API에서는 백엔드에서 제공해야 함
+                            salary: "4000-6000만원", // 실제 API에서는 백엔드에서 제공해야 함
                             deadline: nil,
-                            companyName: "테크 컴퍼니", // 실제 API에서는 백엔드에서 제공
+                            companyName: "테크 컴퍼니", // 실제 API에서는 백엔드에서 제공해야 함
                             companyEmail: nil,
                             createdAt: matchingJob.createdAt,
                             matchRate: matchingJob.matchRate
@@ -100,11 +101,16 @@ class JobViewModel: ObservableObject {
                     }
                     
                     self.isLoading = false
+                    
+                    // 디버그 로깅
+                    if MatchingDebugSettings.enableDetailedLogging {
+                        self.logMatchingResults()
+                    }
                 }
             } catch {
                 DispatchQueue.main.async {
                     self.isLoading = false
-                    print("🔴 매칭 채용공고 로드 실패: \(error)")
+                    print("🔴 AI 매칭 API 호출 실패: \(error)")
                     self.handleError(error)
                 }
             }
@@ -232,13 +238,13 @@ class JobViewModel: ObservableObject {
 
 // MARK: - 🔧 매칭 개발 설정
 struct MatchingDebugSettings {
-    // 🔧 개발 중 Mock 데이터 사용 여부 (실제 API 준비되면 false로 변경)
-    static let useMockData = true
+    // 🔧 실제 AI 사용으로 변경 (false로 설정)
+    static let useMockData = false
     
     // 🔧 상세 로깅 활성화
     static let enableDetailedLogging = true
     
-    // 🔧 Mock 응답 지연 시간 (초)
+    // 🔧 Mock 응답 지연 시간 (초) - 실제 AI 사용 시 무시됨
     static let mockResponseDelay: Double = 1.5
     
     // 🔧 최소 매칭률 필터 (60% 이상만 표시)
