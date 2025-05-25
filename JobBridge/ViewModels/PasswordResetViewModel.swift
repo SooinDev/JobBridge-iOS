@@ -9,106 +9,105 @@ class PasswordResetViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var successMessage: String?
-    @Published var showResetForm = false // 이메일 제출 후 토큰 입력 및 새 비밀번호 설정 폼으로 전환
-    
+    @Published var showResetForm = false
+
     private let apiService = APIService.shared
-    
+
     func requestPasswordReset() {
-        if email.isEmpty {
-            errorMessage = "이메일을 입력해주세요."
+        guard !email.isEmpty else {
+            self.errorMessage = "이메일을 입력해주세요."
             return
         }
-        
-        // 이메일 형식 검증
-        if !isValidEmail(email) {
-            errorMessage = "유효한 이메일 주소를 입력해주세요."
+
+        guard isValidEmail(email) else {
+            self.errorMessage = "유효한 이메일 주소를 입력해주세요."
             return
         }
-        
-        isLoading = true
-        errorMessage = nil
-        successMessage = nil
-        
-        Task {
-            do {
-                let message = try await apiService.requestPasswordReset(email: email)
-                DispatchQueue.main.async {
-                    self.isLoading = false
+
+        self.isLoading = true
+        self.errorMessage = nil
+        self.successMessage = nil
+
+        let currentEmail = email
+
+        apiService.requestPasswordReset(email: currentEmail) { result in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                switch result {
+                case .success(let message):
                     self.successMessage = message
                     self.showResetForm = true
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                    if let apiError = error as? APIError {
-                        switch apiError {
-                        case .serverError(let message):
-                            self.errorMessage = "서버 오류: \(message)"
-                        default:
-                            self.errorMessage = "비밀번호 재설정 요청 중 오류가 발생했습니다."
-                        }
-                    } else {
-                        self.errorMessage = "네트워크 오류가 발생했습니다."
-                    }
+                case .failure(let error):
+                    self.handleAPIError(error)
                 }
             }
         }
     }
-    
-    func resetPassword() {
-        if resetToken.isEmpty {
-            errorMessage = "비밀번호 재설정 코드를 입력해주세요."
+
+    func resetPassword(onSuccess: @escaping () -> Void) {
+        guard !resetToken.isEmpty else {
+            self.errorMessage = "비밀번호 재설정 코드를 입력해주세요."
             return
         }
-        
-        if newPassword.isEmpty || confirmPassword.isEmpty {
-            errorMessage = "새 비밀번호를 입력해주세요."
+
+        guard !newPassword.isEmpty, !confirmPassword.isEmpty else {
+            self.errorMessage = "새 비밀번호를 입력해주세요."
             return
         }
-        
-        if newPassword != confirmPassword {
-            errorMessage = "비밀번호가 일치하지 않습니다."
+
+        guard newPassword == confirmPassword else {
+            self.errorMessage = "비밀번호가 일치하지 않습니다."
             return
         }
-        
-        // 비밀번호 강도 검증
-        if newPassword.count < 8 {
-            errorMessage = "비밀번호는 8자 이상이어야 합니다."
+
+        guard newPassword.count >= 8 else {
+            self.errorMessage = "비밀번호는 8자 이상이어야 합니다."
             return
         }
-        
-        isLoading = true
-        errorMessage = nil
-        successMessage = nil
-        
-        Task {
-            do {
-                let message = try await apiService.resetPassword(token: resetToken, newPassword: newPassword)
-                DispatchQueue.main.async {
-                    self.isLoading = false
+
+        self.isLoading = true
+        self.errorMessage = nil
+        self.successMessage = nil
+
+        apiService.resetPassword(token: resetToken, newPassword: newPassword) { result in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                switch result {
+                case .success(let message):
                     self.successMessage = message
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                    if let apiError = error as? APIError {
-                        switch apiError {
-                        case .serverError(let message):
-                            self.errorMessage = "서버 오류: \(message)"
-                        default:
-                            self.errorMessage = "비밀번호 변경 중 오류가 발생했습니다."
-                        }
-                    } else {
-                        self.errorMessage = "네트워크 오류가 발생했습니다."
-                    }
+                    onSuccess() // ✅ 성공 시 클로저 실행
+                case .failure(let error):
+                    self.handleAPIError(error)
                 }
             }
         }
     }
-    
-    // 간단한 이메일 형식 검증
+
     private func isValidEmail(_ email: String) -> Bool {
         let emailRegex = #"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"#
         return email.range(of: emailRegex, options: .regularExpression) != nil
+    }
+
+    private func handleAPIError(_ error: Error) {
+        if let apiError = error as? APIError {
+            switch apiError {
+            case .serverError(let message):
+                if message.contains("존재하지") || message.contains("찾을 수 없습니다") {
+                    self.errorMessage = "등록되지 않은 이메일입니다."
+                } else if message.contains("유효하지") || message.contains("invalid") {
+                    self.errorMessage = "유효하지 않은 재설정 코드입니다."
+                } else if message.contains("만료") || message.contains("expired") {
+                    self.errorMessage = "재설정 코드가 만료되었습니다. 새로운 코드를 요청해주세요."
+                } else {
+                    self.errorMessage = message
+                }
+            case .unknown:
+                self.errorMessage = "네트워크 연결을 확인해주세요."
+            default:
+                self.errorMessage = "요청 중 오류가 발생했습니다."
+            }
+        } else {
+            self.errorMessage = "네트워크 오류가 발생했습니다."
+        }
     }
 }

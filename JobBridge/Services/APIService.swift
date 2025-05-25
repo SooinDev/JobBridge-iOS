@@ -659,52 +659,27 @@ class APIService {
     
     // MARK: - 비밀번호 재설정 관련 API
     
-    func requestPasswordReset(email: String) async throws -> String {
-        let url = URL(string: "\(baseURL)/user/request-password-reset")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let body: [String: Any] = ["email": email]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let httpResponse = response as? HTTPURLResponse
-        
-        guard let httpResponse = httpResponse, httpResponse.statusCode == 200 else {
-            if let message = String(data: data, encoding: .utf8) {
-                throw APIError.serverError(message)
+    func requestPasswordReset(email: String, completion: @escaping (Result<String, Error>) -> Void) {
+            Task {
+                do {
+                    let result = try await self.requestPasswordReset(email: email)
+                    completion(.success(result))
+                } catch {
+                    completion(.failure(error))
+                }
             }
-            throw APIError.unknown
         }
-        
-        return String(data: data, encoding: .utf8) ?? "비밀번호 재설정 코드가 발송되었습니다."
-    }
     
-    func resetPassword(token: String, newPassword: String) async throws -> String {
-        let url = URL(string: "\(baseURL)/user/reset-password")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let body: [String: Any] = [
-            "token": token,
-            "newPassword": newPassword
-        ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let httpResponse = response as? HTTPURLResponse
-        
-        guard let httpResponse = httpResponse, httpResponse.statusCode == 200 else {
-            if let message = String(data: data, encoding: .utf8) {
-                throw APIError.serverError(message)
+    func resetPassword(token: String, newPassword: String, completion: @escaping (Result<String, Error>) -> Void) {
+            Task {
+                do {
+                    let result = try await self.resetPassword(token: token, newPassword: newPassword)
+                    completion(.success(result))
+                } catch {
+                    completion(.failure(error))
+                }
             }
-            throw APIError.unknown
         }
-        
-        return String(data: data, encoding: .utf8) ?? "비밀번호가 성공적으로 변경되었습니다."
-    }
     
     // MARK: - 로그아웃
     
@@ -772,6 +747,147 @@ class APIService {
         } catch {
             print("🔴 경력 개발 API 오류: \(error)")
             throw error
+        }
+    }
+    
+    // MARK: - 비밀번호 재설정 관련 API
+
+    func requestPasswordReset(email: String) async throws -> String {
+        let url = URL(string: "\(baseURL)/user/password-reset")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = ["email": email]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        print("🔵 비밀번호 재설정 요청: \(url.absoluteString)")
+        print("🔵 요청 이메일: \(email)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpResponse = response as? HTTPURLResponse
+            
+            print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+            
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("🟢 응답 데이터: \(responseString)")
+            }
+            
+            guard let httpResponse = httpResponse else {
+                throw APIError.unknown
+            }
+            
+            if httpResponse.statusCode == 400 {
+                if let errorResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let message = errorResponse["message"] as? String {
+                    throw APIError.serverError(message)
+                } else if let errorMessage = String(data: data, encoding: .utf8) {
+                    throw APIError.serverError(errorMessage)
+                } else {
+                    throw APIError.serverError("잘못된 요청입니다.")
+                }
+            }
+            
+            if httpResponse.statusCode == 500 {
+                throw APIError.serverError("서버 내부 오류가 발생했습니다.")
+            }
+            
+            if httpResponse.statusCode != 200 {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "알 수 없는 오류"
+                throw APIError.serverError("서버 오류 (\(httpResponse.statusCode)): \(errorMessage)")
+            }
+            
+            if let jsonResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let message = jsonResponse["message"] as? String {
+                return message
+            }
+            else if let message = String(data: data, encoding: .utf8), !message.isEmpty {
+                return message
+            }
+            else {
+                return "비밀번호 재설정 코드가 이메일로 발송되었습니다."
+            }
+            
+        } catch {
+            print("🔴 비밀번호 재설정 요청 오류: \(error)")
+            
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.unknown
+            }
+        }
+    }
+
+    func resetPassword(token: String, newPassword: String) async throws -> String {
+        let url = URL(string: "\(baseURL)/user/password-reset/confirm")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = [
+            "token": token,
+            "newPassword": newPassword
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        print("🔵 비밀번호 변경 요청: \(url.absoluteString)")
+        print("🔵 토큰: \(token)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpResponse = response as? HTTPURLResponse
+            
+            print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+            
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("🟢 응답 데이터: \(responseString)")
+            }
+            
+            guard let httpResponse = httpResponse else {
+                throw APIError.unknown
+            }
+            
+            if httpResponse.statusCode == 400 {
+                if let errorResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let message = errorResponse["message"] as? String {
+                    throw APIError.serverError(message)
+                } else if let errorMessage = String(data: data, encoding: .utf8) {
+                    throw APIError.serverError(errorMessage)
+                } else {
+                    throw APIError.serverError("유효하지 않은 토큰이거나 비밀번호 형식이 올바르지 않습니다.")
+                }
+            }
+            
+            if httpResponse.statusCode == 500 {
+                throw APIError.serverError("서버 내부 오류가 발생했습니다.")
+            }
+            
+            if httpResponse.statusCode != 200 {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "알 수 없는 오류"
+                throw APIError.serverError("서버 오류 (\(httpResponse.statusCode)): \(errorMessage)")
+            }
+            
+            if let jsonResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let message = jsonResponse["message"] as? String {
+                return message
+            }
+            else if let message = String(data: data, encoding: .utf8), !message.isEmpty {
+                return message
+            }
+            else {
+                return "비밀번호가 성공적으로 변경되었습니다."
+            }
+            
+        } catch {
+            print("🔴 비밀번호 변경 오류: \(error)")
+            
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.unknown
+            }
         }
     }
 }

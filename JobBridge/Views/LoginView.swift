@@ -10,7 +10,6 @@ struct LoginView: View {
     @State private var animateBackground = false
     @State private var animateFields = false
     @State private var showPasswordReset = false // 상태 변수 추가
-    @State private var showPasswordAlert = false
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -168,15 +167,6 @@ struct LoginView: View {
                                 }
                                 .font(.footnote)
                                 .foregroundColor(Color.blue)
-
-                                // View 수정자로 추가
-                                .alert(isPresented: $showPasswordAlert) {
-                                    Alert(
-                                        title: Text("준비 중"),
-                                        message: Text("비밀번호 찾기 기능은 현재 개발 중입니다. 빠른 시일 내에 제공될 예정입니다."),
-                                        dismissButton: .default(Text("확인"))
-                                    )
-                                }
                             }
                             .padding(.top, 10)
                             
