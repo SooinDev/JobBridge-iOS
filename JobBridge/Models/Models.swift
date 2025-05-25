@@ -84,10 +84,6 @@ struct MatchingJobResponse: Codable, Identifiable {
     let matchRate: Double
 }
 
-struct CareerRecommendationResponse: Codable {
-    let recommendations: [String]
-}
-
 // MARK: - 채용공고 검색 관련 모델
 struct JobSearchRequest: Codable {
     let keyword: String?
@@ -134,4 +130,8 @@ extension JobPostingResponse: Equatable {
     static func == (lhs: JobPostingResponse, rhs: JobPostingResponse) -> Bool {
         return lhs.id == rhs.id
     }
+}
+
+struct CareerRecommendationResponse: Codable {
+    let recommendations: [String]
 }

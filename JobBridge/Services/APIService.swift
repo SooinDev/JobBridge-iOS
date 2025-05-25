@@ -652,4 +652,55 @@ class APIService {
         UserDefaults.standard.set(loginResponse.email, forKey: "userEmail")
         UserDefaults.standard.set(loginResponse.userType, forKey: "userType")
     }
+    
+    // APIService.swift의 기존 함수들 뒤에 추가
+    func getCareerRecommendations(resumeId: Int, jobPostingId: Int) async throws -> CareerRecommendationResponse {
+        guard let token = authToken else {
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
+        }
+        
+        let url = URL(string: "\(baseURL)/match/career?resumeId=\(resumeId)&jobPostingId=\(jobPostingId)")!
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        print("🔵 경력 개발 API 호출: \(url.absoluteString)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpResponse = response as? HTTPURLResponse
+            
+            print("🟢 경력 개발 응답 코드: \(httpResponse?.statusCode ?? 0)")
+            
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("🟢 경력 개발 응답 데이터: \(responseString)")
+            }
+            
+            guard let httpResponse = httpResponse else {
+                throw APIError.unknown
+            }
+            
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
+            }
+            
+            if httpResponse.statusCode != 200 {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "알 수 없는 오류"
+                throw APIError.serverError("서버 오류 (\(httpResponse.statusCode)): \(errorMessage)")
+            }
+            
+            // 백엔드 응답이 배열인지 객체인지 먼저 확인
+            do {
+                // 먼저 배열로 디코딩 시도
+                let recommendationsArray = try JSONDecoder().decode([String].self, from: data)
+                return CareerRecommendationResponse(recommendations: recommendationsArray)
+            } catch {
+                // 배열 디코딩 실패 시 객체로 디코딩 시도
+                return try JSONDecoder().decode(CareerRecommendationResponse.self, from: data)
+            }
+            
+        } catch {
+            print("🔴 경력 개발 API 오류: \(error)")
+            throw error
+        }
+    }
 }

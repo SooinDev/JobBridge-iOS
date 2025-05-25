@@ -93,10 +93,53 @@ struct JobDetailView: View {
                     .animation(.easeOut(duration: 0.8).delay(0.2), value: animateContent)
                 }
                 
-                // 하단 고정 지원 버튼 - 플로팅 스타일
+                // 하단 고정 버튼들 - 플로팅 스타일
                 VStack {
                     Spacer()
                     
+                    // AI 경력 개발 가이드 버튼 (개인 회원만)
+                    if getCurrentUser()?.userType == "INDIVIDUAL" {
+                        NavigationLink(destination: CareerDevelopmentView(
+                            resume: getCurrentUserResume(),
+                            jobPosting: job
+                        )) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "lightbulb.fill")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.white)
+                                
+                                Text("AI 경력 개발 가이드")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundColor(.white)
+                                
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.purple,
+                                        Color.blue.opacity(0.8)
+                                    ]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .cornerRadius(12)
+                            .shadow(color: Color.purple.opacity(0.3), radius: 8, x: 0, y: 4)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            )
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 10)
+                    }
+                    
+                    // 지원 버튼
                     ModernFloatingApplyButton(
                         isApplied: viewModel.isApplied,
                         isLoading: viewModel.isLoading,
@@ -148,6 +191,35 @@ struct JobDetailView: View {
         } message: {
             Text(viewModel.applicationErrorMessage ?? "지원 중 오류가 발생했습니다.")
         }
+    }
+    
+    // MARK: - 도우미 함수들
+    
+    private func getCurrentUser() -> LoginResponse? {
+        guard let userName = UserDefaults.standard.string(forKey: "userName"),
+              let userEmail = UserDefaults.standard.string(forKey: "userEmail"),
+              let userType = UserDefaults.standard.string(forKey: "userType"),
+              let token = UserDefaults.standard.string(forKey: "authToken") else {
+            return nil
+        }
+        
+        return LoginResponse(
+            token: token,
+            name: userName,
+            email: userEmail,
+            userType: userType
+        )
+    }
+    
+    private func getCurrentUserResume() -> ResumeResponse {
+        return ResumeResponse(
+            id: 1,
+            title: "내 이력서",
+            content: "iOS 개발자로서 3년간의 경험을 쌓아왔습니다. Swift, SwiftUI, UIKit을 활용한 앱 개발 경험이 있으며, MVVM 패턴과 Combine을 활용한 반응형 프로그래밍에 익숙합니다.",
+            userName: getCurrentUser()?.name ?? "사용자",
+            createdAt: "2024-01-01 10:00",
+            updatedAt: "2024-01-01 10:00"
+        )
     }
 }
 
@@ -803,12 +875,13 @@ struct ModernCompanyInfoSection: View {
     }
 }
 
+// MARK: - 실제 누락된 컴포넌트들만 추가
+
 struct ModernStatusMessage: View {
     let message: String
     let isError: Bool
     @Environment(\.colorScheme) var colorScheme
     
-    // 복잡한 표현식을 계산 프로퍼티로 분리
     private var iconColor: Color {
         let baseColor = isError ? Color.red : Color.green
         return colorScheme == .dark ?
@@ -862,7 +935,6 @@ struct ModernFloatingApplyButton: View {
     let onApplyTap: () -> Void
     @Environment(\.colorScheme) var colorScheme
     
-    // 복잡한 표현식을 계산 프로퍼티로 분리
     private var buttonGradientColors: [Color] {
         if isApplied {
             return colorScheme == .dark ?
@@ -927,7 +999,6 @@ struct ModernLoadingView: View {
     @State private var rotation = 0.0
     @Environment(\.colorScheme) var colorScheme
     
-    // 복잡한 표현식을 계산 프로퍼티로 분리
     private var strokeColor: Color {
         let opacity = colorScheme == .dark ? 0.3 : 0.2
         return AppTheme.primary.opacity(opacity)
@@ -975,7 +1046,6 @@ struct ModernErrorView: View {
     let retryAction: () -> Void
     @Environment(\.colorScheme) var colorScheme
     
-    // 복잡한 표현식을 계산 프로퍼티로 분리
     private var circleBackgroundColor: Color {
         colorScheme == .dark ?
             Color.red.opacity(0.15) :
@@ -1071,6 +1141,7 @@ extension String {
         
         if let date = dateFormatter.date(from: self) {
             dateFormatter.dateFormat = "yyyy년 M월 d일"
+            dateFormatter.locale = Locale(identifier: "ko_KR")
             return dateFormatter.string(from: date)
         }
         
