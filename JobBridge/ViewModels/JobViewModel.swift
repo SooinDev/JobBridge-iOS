@@ -2,14 +2,15 @@ import Foundation
 import SwiftUI
 
 class JobViewModel: ObservableObject {
-    @Published var jobs: [JobPostingResponse] = []
+    @Published var jobs: [JobPostingResponse] = []           // 최근 채용공고 (10개)
+    @Published var allJobs: [JobPostingResponse] = []        // ✅ 모든 채용공고
     @Published var matchingJobs: [JobPostingResponse] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     
     private let apiService = APIService.shared
     
-    // MARK: - 기본 채용공고 로드
+    // MARK: - 기본 채용공고 로드 (최근 10개)
     func loadRecentJobs() {
         isLoading = true
         errorMessage = nil
@@ -20,22 +21,40 @@ class JobViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self.jobs = fetchedJobs
                     self.isLoading = false
+                    print("🟢 최근 채용공고 \(fetchedJobs.count)개 로드 완료")
                 }
             } catch {
                 DispatchQueue.main.async {
                     self.isLoading = false
-                    if let apiError = error as? APIError {
-                        switch apiError {
-                        case .unauthorized:
-                            self.errorMessage = "인증이 필요합니다. 다시 로그인해주세요."
-                        case .serverError(let message):
-                            self.errorMessage = "서버 오류: \(message)"
-                        default:
-                            self.errorMessage = "채용공고를 불러오는 중 오류가 발생했습니다."
-                        }
+                    self.handleError(error)
+                }
+            }
+        }
+    }
+    
+    // MARK: - ✅ 새로 추가: 모든 채용공고 로드
+    func loadAllJobs(page: Int = 0, size: Int = 100) {
+        isLoading = true
+        errorMessage = nil
+        
+        Task {
+            do {
+                let fetchedJobs = try await apiService.getAllJobs(page: page, size: size)
+                DispatchQueue.main.async {
+                    if page == 0 {
+                        // 첫 페이지는 기존 데이터 교체
+                        self.allJobs = fetchedJobs
                     } else {
-                        self.errorMessage = "네트워크 오류가 발생했습니다."
+                        // 추가 페이지는 기존 데이터에 추가
+                        self.allJobs.append(contentsOf: fetchedJobs)
                     }
+                    self.isLoading = false
+                    print("🟢 전체 채용공고 \(self.allJobs.count)개 로드 완료 (페이지: \(page))")
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.handleError(error)
                 }
             }
         }
@@ -50,7 +69,7 @@ class JobViewModel: ObservableObject {
         Task {
             do {
                 print("🔵 매칭 채용공고 요청 시작 - resumeId: \(resumeId)")
-                let fetchedJobs = try await apiService.getMatchingJobsForResume(resumeId: resumeId)
+                let fetchedJobs: [MatchingJobResponse] = try await apiService.getMatchingJobsForResume(resumeId: resumeId)
                 DispatchQueue.main.async {
                     print("🟢 매칭 채용공고 \(fetchedJobs.count)개 로드 완료")
                     
@@ -86,19 +105,7 @@ class JobViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self.isLoading = false
                     print("🔴 매칭 채용공고 로드 실패: \(error)")
-                    
-                    if let apiError = error as? APIError {
-                        switch apiError {
-                        case .unauthorized:
-                            self.errorMessage = "인증이 필요합니다. 다시 로그인해주세요."
-                        case .serverError(let message):
-                            self.errorMessage = "서버 오류: \(message)"
-                        default:
-                            self.errorMessage = "매칭 결과를 불러오는 중 오류가 발생했습니다."
-                        }
-                    } else {
-                        self.errorMessage = "네트워크 오류가 발생했습니다."
-                    }
+                    self.handleError(error)
                 }
             }
         }
@@ -173,18 +180,7 @@ class JobViewModel: ObservableObject {
                         print("🔴 매칭 API 오류: \(error)")
                     }
                     
-                    if let apiError = error as? APIError {
-                        switch apiError {
-                        case .unauthorized:
-                            self.errorMessage = "인증이 필요합니다. 다시 로그인해주세요."
-                        case .serverError(let message):
-                            self.errorMessage = "서버 오류: \(message)"
-                        default:
-                            self.errorMessage = "매칭 결과를 불러오는 중 오류가 발생했습니다."
-                        }
-                    } else {
-                        self.errorMessage = "네트워크 오류가 발생했습니다."
-                    }
+                    self.handleError(error)
                 }
             }
         }
@@ -211,20 +207,25 @@ class JobViewModel: ObservableObject {
             } catch {
                 DispatchQueue.main.async {
                     self.isLoading = false
-                    if let apiError = error as? APIError {
-                        switch apiError {
-                        case .unauthorized:
-                            self.errorMessage = "인증이 필요합니다. 다시 로그인해주세요."
-                        case .serverError(let message):
-                            self.errorMessage = "서버 오류: \(message)"
-                        default:
-                            self.errorMessage = "채용공고 상세 정보를 불러오는 중 오류가 발생했습니다."
-                        }
-                    } else {
-                        self.errorMessage = "네트워크 오류가 발생했습니다."
-                    }
+                    self.handleError(error)
                 }
             }
+        }
+    }
+    
+    // MARK: - 에러 처리
+    private func handleError(_ error: Error) {
+        if let apiError = error as? APIError {
+            switch apiError {
+            case .unauthorized:
+                self.errorMessage = "인증이 필요합니다. 다시 로그인해주세요."
+            case .serverError(let message):
+                self.errorMessage = "서버 오류: \(message)"
+            default:
+                self.errorMessage = "채용공고를 불러오는 중 오류가 발생했습니다."
+            }
+        } else {
+            self.errorMessage = "네트워크 오류가 발생했습니다."
         }
     }
 }

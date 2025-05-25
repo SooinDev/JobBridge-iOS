@@ -400,6 +400,40 @@ class APIService {
         return try JSONDecoder().decode([JobPostingResponse].self, from: data)
     }
     
+    // ✅ 새로 추가: 모든 채용공고 조회
+    func getAllJobs(page: Int = 0, size: Int = 50, sortBy: String = "createdAt", sortDir: String = "desc") async throws -> [JobPostingResponse] {
+        guard let token = authToken else {
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
+        }
+        
+        let url = URL(string: "\(baseURL)/jobs/all?page=\(page)&size=\(size)&sortBy=\(sortBy)&sortDir=\(sortDir)")!
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        print("🔵 모든 채용공고 요청: \(url.absoluteString)")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.unknown
+        }
+        
+        print("🟢 응답 코드: \(httpResponse.statusCode)")
+        
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
+        }
+        
+        if httpResponse.statusCode != 200 {
+            throw APIError.serverError("Status code: \(httpResponse.statusCode)")
+        }
+        
+        let jobs = try JSONDecoder().decode([JobPostingResponse].self, from: data)
+        print("🟢 총 \(jobs.count)개 채용공고 로드 완료")
+        
+        return jobs
+    }
+    
     func getJobPosting(jobId: Int) async throws -> JobPostingResponse {
         guard let token = authToken else {
             throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
