@@ -4,7 +4,7 @@ import SwiftUI
 class JobDetailViewModel: ObservableObject {
     @Published var job: JobPostingResponse?
     @Published var isLoading = false
-    @Published var isCheckingApplication = false // 지원 여부 확인 중 상태 추가
+    @Published var isCheckingApplication = false // 지원 여부 확인 중 상태
     @Published var errorMessage: String?
     @Published var isApplied = false // 이미 지원한 공고인지 상태
     @Published var applicationErrorMessage: String? // 지원 시 발생한 오류 메시지
@@ -63,13 +63,17 @@ class JobDetailViewModel: ObservableObject {
         }
     }
     
-    // 이미 지원한 공고인지 확인하는 메서드
+    // ✅ 실제 API를 사용하여 지원 여부 확인
     func checkIfAlreadyApplied() {
         guard let jobId = jobId ?? job?.id else {
+            print("⚠️ jobId가 없어서 지원 여부 확인을 건너뜁니다.")
             return
         }
         
         isCheckingApplication = true
+        applicationErrorMessage = nil
+        
+        print("🔵 지원 여부 확인 시작 - jobId: \(jobId)")
         
         Task {
             do {
@@ -87,9 +91,29 @@ class JobDetailViewModel: ObservableObject {
             } catch {
                 DispatchQueue.main.async {
                     self.isCheckingApplication = false
-                    print("⚠️ 지원 여부 확인 중 오류 발생: \(error)")
-                    // 오류 발생 시 기본값으로 미지원 상태 설정 (사용자 경험 관점)
-                    self.isApplied = false
+                    
+                    // 에러 타입에 따른 처리
+                    if let apiError = error as? APIError {
+                        switch apiError {
+                        case .unauthorized:
+                            print("🔴 인증 오류 - 로그인이 필요합니다")
+                            self.applicationErrorMessage = "로그인이 필요합니다."
+                        case .forbidden:
+                            print("🔴 권한 오류 - 개인 회원만 지원 가능")
+                            self.applicationErrorMessage = "개인 회원만 지원할 수 있습니다."
+                        case .serverError(let message):
+                            print("🔴 서버 오류: \(message)")
+                            self.applicationErrorMessage = message
+                        default:
+                            print("🔴 기타 API 오류: \(error)")
+                            // 기본값으로 미지원 상태 설정 (사용자가 지원을 시도할 수 있도록)
+                            self.isApplied = false
+                        }
+                    } else {
+                        print("🔴 네트워크 오류: \(error)")
+                        // 네트워크 오류 시에도 기본값으로 미지원 상태 설정
+                        self.isApplied = false
+                    }
                 }
             }
         }
@@ -118,7 +142,8 @@ class JobDetailViewModel: ObservableObject {
                 let message = try await apiService.applyToJob(jobId: jobId)
                 DispatchQueue.main.async {
                     self.isLoading = false
-                    self.isApplied = true
+                    self.isApplied = true // 지원 성공 시 상태 업데이트
+                    print("✅ 지원 완료: \(message)")
                     completion(true)
                 }
             } catch {

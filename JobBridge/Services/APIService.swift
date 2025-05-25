@@ -250,9 +250,80 @@ class APIService {
             throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
         }
         
-        // 실제 API가 없으므로 임시로 false 반환
-        // 추후 백엔드에서 "/api/applications/check/{jobId}" 엔드포인트 구현 필요
-        return false
+        let url = URL(string: "\(baseURL)/applications/check/\(jobId)")!
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        print("🔵 지원 여부 확인 요청: \(url.absoluteString)")
+        print("🔵 요청 헤더: \(request.allHTTPHeaderFields ?? [:])")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpResponse = response as? HTTPURLResponse
+            
+            print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+            
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("🟢 응답 데이터: \(responseString)")
+            }
+            
+            guard let httpResponse = httpResponse else {
+                throw APIError.unknown
+            }
+            
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
+            }
+            
+            if httpResponse.statusCode == 403 {
+                // 기업 회원이거나 권한이 없는 경우
+                print("⚠️ 권한 없음 - 개인 회원만 지원 가능")
+                return false
+            }
+            
+            if httpResponse.statusCode == 400 {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "잘못된 요청입니다."
+                throw APIError.serverError("요청 오류: \(errorMessage)")
+            }
+            
+            if httpResponse.statusCode == 404 {
+                throw APIError.serverError("채용공고를 찾을 수 없습니다.")
+            }
+            
+            if httpResponse.statusCode != 200 {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "알 수 없는 오류"
+                throw APIError.serverError("서버 오류 (\(httpResponse.statusCode)): \(errorMessage)")
+            }
+            
+            // JSON 응답 파싱
+            do {
+                let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let applied = jsonResponse?["applied"] as? Bool ?? false
+                let hasError = jsonResponse?["error"] as? Bool ?? false
+                
+                if hasError {
+                    print("🔴 서버에서 오류 응답")
+                    return false
+                }
+                
+                print("🟢 지원 여부 확인 완료: \(applied)")
+                return applied
+                
+            } catch {
+                print("🔴 JSON 파싱 오류: \(error)")
+                throw APIError.decodingError
+            }
+            
+        } catch {
+            print("🔴 네트워크 요청 오류: \(error)")
+            
+            // 네트워크 오류 시 안전하게 false 반환 (사용자가 지원을 시도할 수 있도록)
+            if error is APIError {
+                throw error
+            } else {
+                throw APIError.unknown
+            }
+        }
     }
     
     // MARK: - 이력서 관련 API
