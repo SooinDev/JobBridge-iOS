@@ -1,3 +1,4 @@
+// HomeView.swift - 수정된 버전 (ResumeSelectionCard 문제 해결)
 import SwiftUI
 
 struct HomeView: View {
@@ -232,7 +233,7 @@ struct ImprovedRecommendedJobsSection: View {
     @ObservedObject var resumeViewModel: ResumeViewModel
     @State private var selectedResumeId: Int?
     @State private var showingResumeSelector = false
-    @State private var showingAllRecommendations = false // ✅ 추가
+    @State private var showingAllRecommendations = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -266,8 +267,8 @@ struct ImprovedRecommendedJobsSection: View {
                 .frame(height: 120)
             } else {
                 VStack(spacing: 12) {
-                    // 이력서 선택 카드
-                    ResumeSelectionCard(
+                    // 이력서 선택 카드 - 수정된 매개변수 타입
+                    HomeResumeSelectionCard(
                         resumes: resumeViewModel.resumes,
                         selectedResumeId: $selectedResumeId,
                         onSelectionChanged: { resumeId in
@@ -303,7 +304,7 @@ struct ImprovedRecommendedJobsSection: View {
                                 .foregroundColor(AppTheme.textPrimary)
                             }
                             
-                            // ✅ 더보기 버튼 수정 - 터치 영역 확대 및 시각적 개선
+                            // 더보기 버튼
                             if jobViewModel.matchingJobs.count > 2 {
                                 Button(action: {
                                     showingAllRecommendations = true
@@ -343,11 +344,10 @@ struct ImprovedRecommendedJobsSection: View {
                                             .stroke(AppTheme.primary.opacity(0.2), lineWidth: 1)
                                     )
                                 }
-                                .contentShape(Rectangle()) // ✅ 전체 영역을 터치 가능하게 만듦
+                                .contentShape(Rectangle())
                                 .scaleEffect(showingAllRecommendations ? 0.98 : 1.0)
                                 .animation(.spring(response: 0.3), value: showingAllRecommendations)
                                 .padding(.top, 8)
-                                // ✅ NavigationLink로 실제 이동 처리
                                 .background(
                                     NavigationLink(
                                         destination: AllRecommendationsView(
@@ -392,7 +392,6 @@ struct ImprovedRecommendedJobsSection: View {
         })
     }
     
-    // ✅ 선택된 이력서 제목 가져오기 함수 추가
     private func getSelectedResumeTitle() -> String {
         guard let selectedId = selectedResumeId,
               let selectedResume = resumeViewModel.resumes.first(where: { $0.id == selectedId }) else {
@@ -402,8 +401,8 @@ struct ImprovedRecommendedJobsSection: View {
     }
 }
 
-// MARK: - 이력서 선택 카드
-struct ResumeSelectionCard: View {
+// MARK: - Home용 이력서 선택 카드 (이름 변경으로 중복 해결)
+struct HomeResumeSelectionCard: View {
     let resumes: [ResumeResponse]
     @Binding var selectedResumeId: Int?
     let onSelectionChanged: (Int) -> Void

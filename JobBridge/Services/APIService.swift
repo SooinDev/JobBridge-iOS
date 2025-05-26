@@ -10,23 +10,23 @@ enum APIError: Error {
     case unknown
     
     var errorMessage: String {
-            switch self {
-            case .invalidURL:
-                return "유효하지 않은 URL입니다."
-            case .noData:
-                return "데이터를 받아오지 못했습니다."
-            case .decodingError:
-                return "데이터 형식에 문제가 있습니다."
-            case .unauthorized(let message):
-                return message
-            case .forbidden(let message):
-                return message
-            case .serverError(let message):
-                return "서버 오류: \(message)"
-            case .unknown:
-                return "알 수 없는 오류가 발생했습니다."
-            }
+        switch self {
+        case .invalidURL:
+            return "유효하지 않은 URL입니다."
+        case .noData:
+            return "데이터를 받아오지 못했습니다."
+        case .decodingError:
+            return "데이터 형식에 문제가 있습니다."
+        case .unauthorized(let message):
+            return message
+        case .forbidden(let message):
+            return message
+        case .serverError(let message):
+            return "서버 오류: \(message)"
+        case .unknown:
+            return "알 수 없는 오류가 발생했습니다."
         }
+    }
 }
 
 class APIService {
@@ -34,6 +34,22 @@ class APIService {
     
     // 접근 제어자 변경
     internal let baseURL = "http://192.168.219.100:8080/api"
+    
+    // 🔧 타임아웃 증가된 URLSession 설정
+    private lazy var urlSession: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        
+        // AI 매칭 작업을 위한 타임아웃 증가
+        configuration.timeoutIntervalForRequest = 120.0    // 2분으로 증가
+        configuration.timeoutIntervalForResource = 300.0   // 5분으로 증가
+        
+        // 연결 안정성 향상
+        configuration.waitsForConnectivity = true
+        configuration.allowsCellularAccess = true
+        configuration.httpMaximumConnectionsPerHost = 6
+        
+        return URLSession(configuration: configuration)
+    }()
     
     internal var authToken: String? {
         get {
@@ -60,7 +76,7 @@ class APIService {
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.unknown
@@ -112,7 +128,7 @@ class APIService {
         let encoder = JSONEncoder()
         urlRequest.httpBody = try encoder.encode(request)
         
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        let (data, response) = try await urlSession.data(for: urlRequest)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.unknown
@@ -129,7 +145,7 @@ class APIService {
         }
     }
     
-    // MARK: - 🔥 매칭 관련 API (핵심 기능)
+    // MARK: - 🔥 매칭 관련 API (핵심 기능) - 타임아웃 증가 적용
     
     func getMatchingJobsForResume(resumeId: Int) async throws -> [MatchingJobResponse] {
         guard let token = authToken else {
@@ -140,11 +156,15 @@ class APIService {
         var request = URLRequest(url: url)
         request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
+        // 🔧 개별 요청에 타임아웃 설정 (AI 매칭용)
+        request.timeoutInterval = 120.0 // 2분
+        
         print("🔵 매칭 채용공고 요청: \(url.absoluteString)")
+        print("🔵 타임아웃 설정: \(request.timeoutInterval)초")
         print("🔵 요청 헤더: \(request.allHTTPHeaderFields ?? [:])")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             let httpResponse = response as? HTTPURLResponse
             
             print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
@@ -170,6 +190,15 @@ class APIService {
                 throw APIError.serverError("이력서를 찾을 수 없습니다.")
             }
             
+            // 🔧 타임아웃 관련 에러 처리 추가
+            if httpResponse.statusCode == 408 {
+                throw APIError.serverError("AI 분석이 예상보다 오래 걸리고 있습니다. 잠시 후 다시 시도해주세요.")
+            }
+            
+            if 500...599 ~= httpResponse.statusCode {
+                throw APIError.serverError("서버에서 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
+            }
+            
             if httpResponse.statusCode != 200 {
                 let errorMessage = String(data: data, encoding: .utf8) ?? "알 수 없는 오류"
                 throw APIError.serverError("서버 오류 (\(httpResponse.statusCode)): \(errorMessage)")
@@ -190,10 +219,64 @@ class APIService {
                 throw APIError.decodingError
             }
             
+        } catch let error as URLError {
+            // 🔧 네트워크 에러 처리 개선
+            print("🔴 네트워크 요청 오류: \(error)")
+            
+            switch error.code {
+            case .timedOut:
+                throw APIError.serverError("AI 분석이 예상보다 오래 걸리고 있습니다. 잠시 후 다시 시도해주세요.")
+            case .networkConnectionLost, .notConnectedToInternet:
+                throw APIError.serverError("네트워크 연결을 확인하고 다시 시도해주세요.")
+            case .cannotConnectToHost, .cannotFindHost:
+                throw APIError.serverError("서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.")
+            default:
+                throw APIError.serverError("네트워크 오류: \(error.localizedDescription)")
+            }
         } catch {
             print("🔴 네트워크 요청 오류: \(error)")
             throw error
         }
+    }
+    
+    // 🔧 재시도 로직이 포함된 AI 매칭 요청
+    func getMatchingJobsForResumeWithRetry(resumeId: Int, maxRetries: Int = 3) async throws -> [MatchingJobResponse] {
+        var lastError: Error?
+        
+        for attempt in 1...maxRetries {
+            do {
+                print("🔄 AI 매칭 시도 \(attempt)/\(maxRetries)")
+                return try await getMatchingJobsForResume(resumeId: resumeId)
+                
+            } catch let error as APIError {
+                lastError = error
+                
+                // 인증/권한 오류는 재시도하지 않음
+                switch error {
+                case .unauthorized, .forbidden:
+                    throw error
+                default:
+                    break
+                }
+                
+                if attempt < maxRetries {
+                    let delay = Double(attempt) * 2.0 // 2초, 4초, 6초...
+                    print("🟡 \(delay)초 후 재시도...")
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+                
+            } catch {
+                lastError = error
+                
+                if attempt < maxRetries {
+                    let delay = Double(attempt) * 2.0
+                    print("🟡 \(delay)초 후 재시도...")
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+            }
+        }
+        
+        throw lastError ?? APIError.unknown
     }
     
     // 🔥 Mock 데이터 (테스트용)
@@ -259,7 +342,7 @@ class APIService {
         print("🔵 요청 헤더: \(request.allHTTPHeaderFields ?? [:])")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             let httpResponse = response as? HTTPURLResponse
             
             print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
@@ -338,7 +421,7 @@ class APIService {
         var request = URLRequest(url: url)
         request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.unknown
@@ -369,7 +452,7 @@ class APIService {
         let encoder = JSONEncoder()
         urlRequest.httpBody = try encoder.encode(request)
         
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        let (data, response) = try await urlSession.data(for: urlRequest)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.unknown
@@ -400,7 +483,7 @@ class APIService {
         let encoder = JSONEncoder()
         urlRequest.httpBody = try encoder.encode(request)
         
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        let (data, response) = try await urlSession.data(for: urlRequest)
         let httpResponse = response as? HTTPURLResponse
         
         guard let httpResponse = httpResponse else {
@@ -428,7 +511,7 @@ class APIService {
         request.httpMethod = "DELETE"
         request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         let httpResponse = response as? HTTPURLResponse
         
         guard let httpResponse = httpResponse else {
@@ -455,7 +538,7 @@ class APIService {
         var request = URLRequest(url: url)
         request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.unknown
@@ -484,7 +567,7 @@ class APIService {
         
         print("🔵 모든 채용공고 요청: \(url.absoluteString)")
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.unknown
@@ -515,7 +598,7 @@ class APIService {
         var request = URLRequest(url: url)
         request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         let httpResponse = response as? HTTPURLResponse
         
         guard let httpResponse = httpResponse, httpResponse.statusCode == 200 else {
@@ -540,7 +623,7 @@ class APIService {
         request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             let httpResponse = response as? HTTPURLResponse
             
             guard let httpResponse = httpResponse else {
@@ -589,7 +672,7 @@ class APIService {
         request.httpBody = try? JSONSerialization.data(withJSONObject: emptyBody)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             let httpResponse = response as? HTTPURLResponse
             
             guard let httpResponse = httpResponse else {
@@ -623,7 +706,7 @@ class APIService {
         let body: [String: Any] = ["email": email]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         let httpResponse = response as? HTTPURLResponse
         
         guard let httpResponse = httpResponse, httpResponse.statusCode == 200 else {
@@ -645,7 +728,7 @@ class APIService {
         let body: [String: Any] = ["email": email, "code": code]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         let httpResponse = response as? HTTPURLResponse
         
         guard let httpResponse = httpResponse, httpResponse.statusCode == 200 else {
@@ -661,98 +744,27 @@ class APIService {
     // MARK: - 비밀번호 재설정 관련 API
     
     func requestPasswordReset(email: String, completion: @escaping (Result<String, Error>) -> Void) {
-            Task {
-                do {
-                    let result = try await self.requestPasswordReset(email: email)
-                    completion(.success(result))
-                } catch {
-                    completion(.failure(error))
-                }
+        Task {
+            do {
+                let result = try await self.requestPasswordReset(email: email)
+                completion(.success(result))
+            } catch {
+                completion(.failure(error))
             }
         }
+    }
     
     func resetPassword(token: String, newPassword: String, completion: @escaping (Result<String, Error>) -> Void) {
-            Task {
-                do {
-                    let result = try await self.resetPassword(token: token, newPassword: newPassword)
-                    completion(.success(result))
-                } catch {
-                    completion(.failure(error))
-                }
-            }
-        }
-    
-    // MARK: - 로그아웃
-    
-    func logout() {
-        temporaryAuthToken = nil
-        UserDefaults.standard.removeObject(forKey: "authToken")
-        UserDefaults.standard.removeObject(forKey: "userName")
-        UserDefaults.standard.removeObject(forKey: "userEmail")
-        UserDefaults.standard.removeObject(forKey: "userType")
-    }
-    
-    // MARK: - Private Methods
-    
-    private func saveUserInfo(_ loginResponse: LoginResponse) {
-        UserDefaults.standard.set(loginResponse.name, forKey: "userName")
-        UserDefaults.standard.set(loginResponse.email, forKey: "userEmail")
-        UserDefaults.standard.set(loginResponse.userType, forKey: "userType")
-    }
-    
-    // APIService.swift의 기존 함수들 뒤에 추가
-    func getCareerRecommendations(resumeId: Int, jobPostingId: Int) async throws -> CareerRecommendationResponse {
-        guard let token = authToken else {
-            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
-        }
-        
-        let url = URL(string: "\(baseURL)/match/career?resumeId=\(resumeId)&jobPostingId=\(jobPostingId)")!
-        var request = URLRequest(url: url)
-        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        
-        print("🔵 경력 개발 API 호출: \(url.absoluteString)")
-        
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let httpResponse = response as? HTTPURLResponse
-            
-            print("🟢 경력 개발 응답 코드: \(httpResponse?.statusCode ?? 0)")
-            
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("🟢 경력 개발 응답 데이터: \(responseString)")
-            }
-            
-            guard let httpResponse = httpResponse else {
-                throw APIError.unknown
-            }
-            
-            if httpResponse.statusCode == 401 {
-                throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
-            }
-            
-            if httpResponse.statusCode != 200 {
-                let errorMessage = String(data: data, encoding: .utf8) ?? "알 수 없는 오류"
-                throw APIError.serverError("서버 오류 (\(httpResponse.statusCode)): \(errorMessage)")
-            }
-            
-            // 백엔드 응답이 배열인지 객체인지 먼저 확인
+        Task {
             do {
-                // 먼저 배열로 디코딩 시도
-                let recommendationsArray = try JSONDecoder().decode([String].self, from: data)
-                return CareerRecommendationResponse(recommendations: recommendationsArray)
+                let result = try await self.resetPassword(token: token, newPassword: newPassword)
+                completion(.success(result))
             } catch {
-                // 배열 디코딩 실패 시 객체로 디코딩 시도
-                return try JSONDecoder().decode(CareerRecommendationResponse.self, from: data)
+                completion(.failure(error))
             }
-            
-        } catch {
-            print("🔴 경력 개발 API 오류: \(error)")
-            throw error
         }
     }
     
-    // MARK: - 비밀번호 재설정 관련 API
-
     func requestPasswordReset(email: String) async throws -> String {
         let url = URL(string: "\(baseURL)/user/password-reset")!
         var request = URLRequest(url: url)
@@ -766,7 +778,7 @@ class APIService {
         print("🔵 요청 이메일: \(email)")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             let httpResponse = response as? HTTPURLResponse
             
             print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
@@ -837,7 +849,7 @@ class APIService {
         print("🔵 토큰: \(token)")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             let httpResponse = response as? HTTPURLResponse
             
             print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
@@ -891,11 +903,96 @@ class APIService {
             }
         }
     }
+    
+    // MARK: - 로그아웃
+    
+    func logout() {
+        temporaryAuthToken = nil
+        UserDefaults.standard.removeObject(forKey: "authToken")
+        UserDefaults.standard.removeObject(forKey: "userName")
+        UserDefaults.standard.removeObject(forKey: "userEmail")
+        UserDefaults.standard.removeObject(forKey: "userType")
+    }
+    
+    // MARK: - Private Methods
+    
+    private func saveUserInfo(_ loginResponse: LoginResponse) {
+        UserDefaults.standard.set(loginResponse.name, forKey: "userName")
+        UserDefaults.standard.set(loginResponse.email, forKey: "userEmail")
+        UserDefaults.standard.set(loginResponse.userType, forKey: "userType")
+    }
+    
+    // MARK: - 경력 개발 추천 API
+    
+    func getCareerRecommendations(resumeId: Int, jobPostingId: Int) async throws -> CareerRecommendationResponse {
+        guard let token = authToken else {
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
+        }
+        
+        let url = URL(string: "\(baseURL)/match/career?resumeId=\(resumeId)&jobPostingId=\(jobPostingId)")!
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        // 🔧 경력 개발 API도 타임아웃 증가
+        request.timeoutInterval = 60.0 // 1분
+        
+        print("🔵 경력 개발 API 호출: \(url.absoluteString)")
+        print("🔵 타임아웃 설정: \(request.timeoutInterval)초")
+        
+        do {
+            let (data, response) = try await urlSession.data(for: request)
+            let httpResponse = response as? HTTPURLResponse
+            
+            print("🟢 경력 개발 응답 코드: \(httpResponse?.statusCode ?? 0)")
+            
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("🟢 경력 개발 응답 데이터: \(responseString)")
+            }
+            
+            guard let httpResponse = httpResponse else {
+                throw APIError.unknown
+            }
+            
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
+            }
+            
+            if httpResponse.statusCode == 408 {
+                throw APIError.serverError("경력 분석이 예상보다 오래 걸리고 있습니다. 잠시 후 다시 시도해주세요.")
+            }
+            
+            if httpResponse.statusCode != 200 {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "알 수 없는 오류"
+                throw APIError.serverError("서버 오류 (\(httpResponse.statusCode)): \(errorMessage)")
+            }
+            
+            // 백엔드 응답이 배열인지 객체인지 먼저 확인
+            do {
+                // 먼저 배열로 디코딩 시도
+                let recommendationsArray = try JSONDecoder().decode([String].self, from: data)
+                return CareerRecommendationResponse(recommendations: recommendationsArray)
+            } catch {
+                // 배열 디코딩 실패 시 객체로 디코딩 시도
+                return try JSONDecoder().decode(CareerRecommendationResponse.self, from: data)
+            }
+            
+        } catch let error as URLError {
+            print("🔴 경력 개발 네트워크 오류: \(error)")
+            
+            switch error.code {
+            case .timedOut:
+                throw APIError.serverError("경력 분석이 예상보다 오래 걸리고 있습니다. 잠시 후 다시 시도해주세요.")
+            default:
+                throw APIError.serverError("네트워크 오류: \(error.localizedDescription)")
+            }
+        } catch {
+            print("🔴 경력 개발 API 오류: \(error)")
+            throw error
+        }
+    }
 }
 
-
-// APIService.swift에 추가할 기업용 메서드들 (수정된 버전)
-
+// MARK: - 기업용 API 확장
 extension APIService {
     
     // MARK: - 기업용 채용공고 관리 API
@@ -913,7 +1010,7 @@ extension APIService {
         print("🔵 내 채용공고 조회 요청: \(url.absoluteString)")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             let httpResponse = response as? HTTPURLResponse
             
             print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
@@ -969,7 +1066,7 @@ extension APIService {
         print("🔵 요청 데이터: \(String(data: urlRequest.httpBody ?? Data(), encoding: .utf8) ?? "nil")")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            let (data, response) = try await urlSession.data(for: urlRequest)
             let httpResponse = response as? HTTPURLResponse
             
             print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
@@ -1024,7 +1121,7 @@ extension APIService {
         print("🔵 채용공고 수정 요청: \(url.absoluteString)")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            let (data, response) = try await urlSession.data(for: urlRequest)
             let httpResponse = response as? HTTPURLResponse
             
             print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
@@ -1071,7 +1168,7 @@ extension APIService {
         print("🔵 채용공고 삭제 요청: \(url.absoluteString)")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
             let httpResponse = response as? HTTPURLResponse
             
             print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
