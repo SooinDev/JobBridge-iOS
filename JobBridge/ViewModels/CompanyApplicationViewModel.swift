@@ -1,4 +1,4 @@
-// CompanyApplicationViewModel.swift - 실제 API 연동
+// CompanyApplicationViewModel.swift - 실제 API만 사용
 import Foundation
 import SwiftUI
 
@@ -8,7 +8,6 @@ class CompanyApplicationViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var selectedFilter: ApplicationFilter = .all
-    @Published var useRealAPI = true // 실제 API 사용 여부 토글
     
     private let apiService = APIService.shared
 
@@ -33,36 +32,35 @@ class CompanyApplicationViewModel: ObservableObject {
     }
 
     // MARK: - 실제 API를 사용한 지원자 목록 로드
-    func loadApplications(for jobId: Int, useMockData: Bool = false) {
+    func loadApplications(for jobId: Int) {
         isLoading = true
         errorMessage = nil
+        
+        print("🔵 실제 API로 지원자 목록 로드 시작 - jobId: \(jobId)")
 
         Task {
             do {
-                let fetchedApplications: [CompanyApplicationResponse]
-
-                if useMockData || !useRealAPI {
-                    print("🟡 Mock 데이터로 지원자 목록 로드 중...")
-                    fetchedApplications = await apiService.getMockApplicationsForJob(jobId: jobId)
-                } else {
-                    print("🔵 실제 API로 지원자 목록 로드 중...")
-                    
-                    // 실제 API 호출
-                    let realApplications = try await apiService.getRealApplicationsForJob(jobId: jobId)
-                    
-                    // RealCompanyApplicationResponse를 CompanyApplicationResponse로 변환
-                    fetchedApplications = realApplications.map { $0.toCompanyApplicationResponse() }
-                }
+                // 실제 API 호출
+                let realApplications = try await apiService.getRealApplicationsForJob(jobId: jobId)
+                
+                // RealCompanyApplicationResponse를 CompanyApplicationResponse로 변환
+                let convertedApplications = realApplications.map { $0.toCompanyApplicationResponse() }
 
                 DispatchQueue.main.async {
-                    self.applications = fetchedApplications
+                    self.applications = convertedApplications
                     self.isLoading = false
-                    print("🟢 지원자 \(fetchedApplications.count)명 로드 완료")
+                    print("🟢 실제 지원자 \(convertedApplications.count)명 로드 완료")
+                    
+                    // 지원자별 상세 정보 로깅
+                    for (index, application) in convertedApplications.enumerated() {
+                        print("📄 지원자 #\(index + 1): \(application.applicantName) (\(application.statusText))")
+                    }
                 }
             } catch {
                 DispatchQueue.main.async {
                     self.isLoading = false
-                    print("🔴 지원자 목록 로드 실패: \(error)")
+                    print("🔴 실제 지원자 목록 로드 실패: \(error)")
+                    
                     if let apiError = error as? APIError {
                         switch apiError {
                         case .unauthorized:
@@ -83,33 +81,26 @@ class CompanyApplicationViewModel: ObservableObject {
     }
 
     // MARK: - 실제 API를 사용한 통계 로드
-    func loadStats(useMockData: Bool = false) {
+    func loadStats() {
+        print("🔵 실제 API로 통계 로드 시작")
+        
         Task {
             do {
-                let fetchedStats: CompanyApplicationStats
+                // 실제 API 호출
+                let realStats = try await apiService.getRealApplicationStats()
                 
-                if useMockData || !useRealAPI {
-                    print("🟡 Mock 데이터로 통계 로드 중...")
-                    fetchedStats = await apiService.getMockApplicationStats()
-                } else {
-                    print("🔵 실제 API로 통계 로드 중...")
-                    
-                    // 실제 API 호출
-                    let realStats = try await apiService.getRealApplicationStats()
-                    
-                    // RealCompanyApplicationStats를 CompanyApplicationStats로 변환
-                    fetchedStats = realStats.toCompanyApplicationStats()
-                }
+                // RealCompanyApplicationStats를 CompanyApplicationStats로 변환
+                let convertedStats = realStats.toCompanyApplicationStats()
 
                 DispatchQueue.main.async {
-                    self.stats = fetchedStats
-                    print("🟢 통계 로드 완료")
-                    print("   - 총 지원자: \(fetchedStats.totalApplications)")
-                    print("   - 대기중: \(fetchedStats.pendingApplications)")
-                    print("   - 이번 달: \(fetchedStats.thisMonthApplications)")
+                    self.stats = convertedStats
+                    print("🟢 실제 통계 로드 완료")
+                    print("   - 총 지원자: \(convertedStats.totalApplications)")
+                    print("   - 대기중: \(convertedStats.pendingApplications)")
+                    print("   - 이번 달: \(convertedStats.thisMonthApplications)")
                 }
             } catch {
-                print("🔴 통계 로드 실패: \(error)")
+                print("🔴 실제 통계 로드 실패: \(error)")
                 
                 DispatchQueue.main.async {
                     // 통계 로드 실패 시 기본값 설정
@@ -125,56 +116,57 @@ class CompanyApplicationViewModel: ObservableObject {
 
     func changeFilter(to filter: ApplicationFilter) {
         selectedFilter = filter
+        print("🔄 필터 변경: \(filter.rawValue) (\(filteredApplications.count)명)")
     }
 
     func updateApplicationStatus(applicationId: Int, newStatus: String) {
         Task {
-            // TODO: 실제 상태 업데이트 API 구현 필요
-            // 현재는 로컬 상태만 업데이트
-            DispatchQueue.main.async {
-                if let index = self.applications.firstIndex(where: { $0.id == applicationId }) {
-                    print("지원자 상태 업데이트: \(applicationId) -> \(newStatus)")
-                    
-                    // 로컬 상태 업데이트
-                    var updatedApplication = self.applications[index]
-                    // CompanyApplicationResponse는 struct이므로 직접 수정 불가
-                    // 새로운 객체를 생성해야 함
-                    let newApplication = CompanyApplicationResponse(
-                        id: updatedApplication.id,
-                        jobPostingId: updatedApplication.jobPostingId,
-                        applicantId: updatedApplication.applicantId,
-                        applicantName: updatedApplication.applicantName,
-                        applicantEmail: updatedApplication.applicantEmail,
-                        appliedAt: updatedApplication.appliedAt,
-                        status: newStatus
-                    )
-                    
-                    self.applications[index] = newApplication
+            do {
+                // TODO: 실제 상태 업데이트 API 구현 필요
+                // let result = try await apiService.updateApplicationStatus(applicationId: applicationId, status: newStatus)
+                
+                DispatchQueue.main.async {
+                    if let index = self.applications.firstIndex(where: { $0.id == applicationId }) {
+                        print("🔄 지원자 상태 업데이트: \(applicationId) -> \(newStatus)")
+                        
+                        // 로컬 상태 업데이트 (임시)
+                        let updatedApplication = self.applications[index]
+                        let newApplication = CompanyApplicationResponse(
+                            id: updatedApplication.id,
+                            jobPostingId: updatedApplication.jobPostingId,
+                            applicantId: updatedApplication.applicantId,
+                            applicantName: updatedApplication.applicantName,
+                            applicantEmail: updatedApplication.applicantEmail,
+                            appliedAt: updatedApplication.appliedAt,
+                            status: newStatus
+                        )
+                        
+                        self.applications[index] = newApplication
+                    }
+                }
+            } catch {
+                print("🔴 지원자 상태 업데이트 실패: \(error)")
+                DispatchQueue.main.async {
+                    self.errorMessage = "상태 업데이트에 실패했습니다."
                 }
             }
         }
     }
 
-    func refresh(for jobId: Int, useMockData: Bool = false) {
-        loadApplications(for: jobId, useMockData: useMockData)
-        loadStats(useMockData: useMockData)
+    func refresh(for jobId: Int) {
+        print("🔄 지원자 데이터 새로고침 - jobId: \(jobId)")
+        loadApplications(for: jobId)
+        loadStats()
     }
 
     func searchApplications(query: String) {
-        // TODO: 검색 기능
+        // TODO: 검색 기능 구현
         print("🔍 지원자 검색: \(query)")
-    }
-    
-    // MARK: - API 모드 토글
-    func toggleAPIMode() {
-        useRealAPI.toggle()
-        print("🔧 API 모드 변경: \(useRealAPI ? "실제 API" : "Mock 데이터")")
     }
     
     // MARK: - 개발용 디버깅
     func debugLogCurrentState() {
         print("🔧 [DEBUG] 현재 지원자 관리 상태:")
-        print("   - API 모드: \(useRealAPI ? "실제 API" : "Mock 데이터")")
         print("   - 총 지원자: \(applications.count)")
         print("   - 선택된 필터: \(selectedFilter.rawValue)")
         print("   - 필터링된 지원자: \(filteredApplications.count)")
@@ -186,6 +178,11 @@ class CompanyApplicationViewModel: ObservableObject {
             print("     * 총 지원자: \(stats.totalApplications)")
             print("     * 대기중: \(stats.pendingApplications)")
             print("     * 이번 달: \(stats.thisMonthApplications)")
+        }
+        
+        print("   - 지원자 목록:")
+        for (index, application) in applications.enumerated() {
+            print("     #\(index + 1): \(application.applicantName) (\(application.statusText))")
         }
     }
 }

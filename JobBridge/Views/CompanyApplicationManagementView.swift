@@ -1,4 +1,4 @@
-// CompanyApplicationManagementView.swift - 기업용 지원자 관리 메인 화면
+// CompanyApplicationManagementView.swift - 실제 API만 사용
 import SwiftUI
 
 struct CompanyApplicationManagementView: View {
@@ -34,7 +34,8 @@ struct CompanyApplicationManagementView: View {
                     ErrorView(
                         message: errorMessage,
                         retryAction: {
-                            viewModel.refresh(for: job.id, useMockData: true)
+                            // 실제 API만 사용
+                            viewModel.refresh(for: job.id)
                         }
                     )
                 } else if viewModel.filteredApplications.isEmpty {
@@ -60,7 +61,8 @@ struct CompanyApplicationManagementView: View {
             },
             trailing: Menu {
                 Button(action: {
-                    viewModel.refresh(for: job.id, useMockData: true)
+                    // 실제 API로 새로고침
+                    viewModel.refresh(for: job.id)
                 }) {
                     Label("새로고침", systemImage: "arrow.clockwise")
                 }
@@ -69,6 +71,13 @@ struct CompanyApplicationManagementView: View {
                     // TODO: 지원자 내보내기 기능
                 }) {
                     Label("지원자 목록 내보내기", systemImage: "square.and.arrow.up")
+                }
+                
+                Button(action: {
+                    // 디버그 정보 출력
+                    viewModel.debugLogCurrentState()
+                }) {
+                    Label("디버그 정보", systemImage: "info.circle")
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -84,12 +93,49 @@ struct CompanyApplicationManagementView: View {
             }
         }
         .onAppear {
-            viewModel.refresh(for: job.id, useMockData: true)
+            // 화면 진입 시 실제 API로 데이터 로드
+            print("🔵 지원자 관리 화면 진입 - 실제 API 사용")
+            viewModel.refresh(for: job.id)
+        }
+        .refreshable {
+            // 당겨서 새로고침 시에도 실제 API 사용
+            viewModel.refresh(for: job.id)
         }
     }
 }
 
-// MARK: - 헤더 뷰
+// MARK: - 실제 API 사용 안내 메시지
+struct RealAPIInfoBanner: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.green)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("실제 API 연동")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                
+                Text("서버에서 실제 지원자 데이터를 불러옵니다")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.green.opacity(0.1))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.green.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - 기존 컴포넌트들 (수정 없음)
 struct CompanyApplicationHeaderView: View {
     let job: JobPostingResponse
     let stats: CompanyApplicationStats?
@@ -115,6 +161,9 @@ struct CompanyApplicationHeaderView: View {
                         .foregroundColor(AppTheme.textTertiary)
                 }
             }
+            
+            // 실제 API 사용 배너 추가
+            RealAPIInfoBanner()
             
             // 통계 정보
             if let stats = stats {
@@ -145,7 +194,7 @@ struct CompanyApplicationHeaderView: View {
     }
 }
 
-// MARK: - 통계 카드
+// MARK: - 나머지 컴포넌트들은 기존과 동일
 struct ApplicationStatCard: View {
     let title: String
     let value: String
@@ -174,7 +223,6 @@ struct ApplicationStatCard: View {
     }
 }
 
-// MARK: - 필터 뷰
 struct ApplicationFilterView: View {
     @Binding var selectedFilter: ApplicationFilter
     let filterCounts: [ApplicationFilter: Int]
@@ -200,7 +248,6 @@ struct ApplicationFilterView: View {
     }
 }
 
-// MARK: - 필터 버튼
 struct ApplicationFilterButton: View {
     let filter: ApplicationFilter
     let count: Int
@@ -236,7 +283,6 @@ struct ApplicationFilterButton: View {
     }
 }
 
-// MARK: - 지원자 목록 뷰
 struct ApplicationsListView: View {
     let applications: [CompanyApplicationResponse]
     let onApplicationTapped: (CompanyApplicationResponse) -> Void
@@ -256,7 +302,6 @@ struct ApplicationsListView: View {
     }
 }
 
-// MARK: - 지원자 행
 struct CompanyApplicationRow: View {
     let application: CompanyApplicationResponse
     
@@ -319,7 +364,6 @@ struct CompanyApplicationRow: View {
     }
 }
 
-// MARK: - 빈 상태 뷰
 struct EmptyApplicationsView: View {
     let filter: ApplicationFilter
     
@@ -374,34 +418,22 @@ struct EmptyApplicationsView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             
-            if filter == .all {
-                // 채용공고 홍보 팁
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Image(systemName: "lightbulb.fill")
-                            .foregroundColor(.yellow)
-                        
-                        Text("지원자 모집 팁")
-                            .font(.headline)
-                            .fontWeight(.bold)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        CompanyTipRow(tip: CompanyTip(icon: "list.bullet", title: "공고 제목", description: "채용공고 제목을 구체적으로 작성하세요", color: .blue))
-                        CompanyTipRow(tip: CompanyTip(icon: "hammer.fill", title: "요구 기술", description: "요구 기술을 명확히 명시하세요", color: .purple))
-                        CompanyTipRow(tip: CompanyTip(icon: "dollarsign.circle.fill", title: "급여 정보", description: "급여 정보를 투명하게 공개하세요", color: .green))
-                        CompanyTipRow(tip: CompanyTip(icon: "heart.text.square.fill", title: "회사 복지", description: "회사 문화와 복지를 어필하세요", color: .orange))
-                    }
-                }
-                .padding()
-                .background(Color.yellow.opacity(0.1))
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
-                )
-                .padding(.horizontal)
+            // 실제 API 사용 안내
+            VStack(spacing: 8) {
+                Text("💡 실제 서버 데이터 연동 중")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.blue)
+                
+                Text("Mock 데이터 대신 실제 백엔드 API에서 지원자 정보를 불러옵니다")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
             }
+            .padding()
+            .background(Color.blue.opacity(0.1))
+            .cornerRadius(12)
+            .padding(.horizontal)
         }
         .padding()
     }
