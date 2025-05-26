@@ -124,7 +124,7 @@ struct CompanyJobRow: View {
                 
                 Spacer()
                 
-                Text("등록: \(job.createdAt.toShortDate())")
+                Text("등록: \(job.createdAt.toCompanyJobStatsFormattedDate())")
                     .font(.caption)
                     .foregroundColor(AppTheme.textTertiary)
             }
@@ -136,7 +136,7 @@ struct CompanyJobRow: View {
                         .font(.caption)
                         .foregroundColor(.orange)
                     
-                    Text("마감: \(deadline.toFormattedDate())")
+                    Text("마감: \(deadline.toCompanyJobStatsFormattedDate())")
                         .font(.caption)
                         .foregroundColor(.orange)
                     
@@ -167,5 +167,21 @@ struct CompanyJobRow: View {
             }
         }
         .padding(.vertical, 8)
+    }
+}
+
+// MARK: - Extensions for CompanyJobStatsView
+extension String {
+    func toCompanyJobStatsFormattedDate() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        
+        if let date = formatter.date(from: self) {
+            let outputFormatter = DateFormatter()
+            outputFormatter.dateFormat = "M/d"
+            return outputFormatter.string(from: date)
+        }
+        
+        return self
     }
 }

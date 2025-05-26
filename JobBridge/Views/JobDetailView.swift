@@ -1132,10 +1132,9 @@ struct ModernErrorView: View {
     }
 }
 
-// MARK: - Extensions
-
+// MARK: - Extensions for JobDetailView
 extension String {
-    func toFormattedDate() -> String {
+    func toJobDetailFormattedDate() -> String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd HH:mm"
         

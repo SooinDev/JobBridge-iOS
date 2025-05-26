@@ -256,3 +256,90 @@ extension CompanyNotificationResponse: Equatable {
         return lhs.id == rhs.id
     }
 }
+
+/// 기업용 지원자 응답 모델
+struct CompanyApplicationResponse: Codable, Identifiable {
+    let id: Int
+    let jobPostingId: Int
+    let applicantId: Int
+    let applicantName: String
+    let applicantEmail: String
+    let appliedAt: String
+    let status: String
+    
+    // 계산 속성들
+    var formattedAppliedDate: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        
+        if let date = formatter.date(from: appliedAt) {
+            let outputFormatter = DateFormatter()
+            outputFormatter.dateFormat = "yyyy년 M월 d일"
+            outputFormatter.locale = Locale(identifier: "ko_KR")
+            return outputFormatter.string(from: date)
+        }
+        
+        return appliedAt
+    }
+    
+    var statusText: String {
+        switch status {
+        case "PENDING": return "대기중"
+        case "REVIEWED": return "검토완료"
+        case "ACCEPTED": return "합격"
+        case "REJECTED": return "불합격"
+        default: return "알 수 없음"
+        }
+    }
+    
+    var statusColor: Color {
+        switch status {
+        case "PENDING": return .blue
+        case "REVIEWED": return .orange
+        case "ACCEPTED": return .green
+        case "REJECTED": return .red
+        default: return .gray
+        }
+    }
+}
+
+/// 기업용 지원자 통계 모델
+struct CompanyApplicationStats: Codable {
+    let totalApplications: Int
+    let pendingApplications: Int
+    let thisMonthApplications: Int
+    
+    var acceptanceRate: Double {
+        guard totalApplications > 0 else { return 0 }
+        return Double(pendingApplications) / Double(totalApplications) * 100
+    }
+}
+
+/// 지원자 필터링 옵션
+enum ApplicationFilter: String, CaseIterable {
+    case all = "전체"
+    case pending = "대기중"
+    case reviewed = "검토완료"
+    case accepted = "합격"
+    case rejected = "불합격"
+    
+    var systemImageName: String {
+        switch self {
+        case .all: return "person.3.fill"
+        case .pending: return "clock.fill"
+        case .reviewed: return "eye.fill"
+        case .accepted: return "checkmark.circle.fill"
+        case .rejected: return "xmark.circle.fill"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .all: return .primary
+        case .pending: return .blue
+        case .reviewed: return .orange
+        case .accepted: return .green
+        case .rejected: return .red
+        }
+    }
+}

@@ -16,6 +16,10 @@ extension String {
         return outputFormatter.string(from: date)
     }
     
+    func toFormattedDate() -> String {
+        return formatDateString()
+    }
+    
     func toShortDate() -> String {
         guard self.count >= 10 else { return self }
         

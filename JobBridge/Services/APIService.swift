@@ -32,11 +32,10 @@ enum APIError: Error {
 class APIService {
     static let shared = APIService()
     
-    private let baseURL = "http://192.168.219.100:8080/api"
+    // 접근 제어자 변경
+    internal let baseURL = "http://192.168.219.100:8080/api"
     
-    private var temporaryAuthToken: String?
-    
-    private var authToken: String? {
+    internal var authToken: String? {
         get {
             return temporaryAuthToken ?? UserDefaults.standard.string(forKey: "authToken")
         }
@@ -44,6 +43,8 @@ class APIService {
             UserDefaults.standard.set(newValue, forKey: "authToken")
         }
     }
+    
+    private var temporaryAuthToken: String?
     
     private init() {}
     

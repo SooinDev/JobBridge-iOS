@@ -23,9 +23,9 @@ struct JobApplicationsView: View {
                         retryAction: { viewModel.loadApplications(for: job.id) }
                     )
                 } else if viewModel.applications.isEmpty {
-                    EmptyApplicationsView()
+                    JobApplicationsEmptyView()
                 } else {
-                    ApplicationsList(applications: viewModel.applications, viewModel: viewModel)
+                    JobApplicationsList(applications: viewModel.applications, viewModel: viewModel)
                 }
                 
                 Spacer()
@@ -84,8 +84,8 @@ struct JobApplicationsHeaderView: View {
     }
 }
 
-// MARK: - EmptyApplicationsView
-struct EmptyApplicationsView: View {
+// MARK: - JobApplicationsEmptyView (고유한 이름)
+struct JobApplicationsEmptyView: View {
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "person.3.sequence.fill")
@@ -114,10 +114,10 @@ struct EmptyApplicationsView: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    CompanyTipRow(tip: "채용공고 제목을 구체적으로 작성하세요")
-                    CompanyTipRow(tip: "요구 기술을 명확히 명시하세요")
-                    CompanyTipRow(tip: "급여 정보를 투명하게 공개하세요")
-                    CompanyTipRow(tip: "회사 문화와 복지를 어필하세요")
+                    JobApplicationsTipRow(tip: "채용공고 제목을 구체적으로 작성하세요")
+                    JobApplicationsTipRow(tip: "요구 기술을 명확히 명시하세요")
+                    JobApplicationsTipRow(tip: "급여 정보를 투명하게 공개하세요")
+                    JobApplicationsTipRow(tip: "회사 문화와 복지를 어필하세요")
                 }
             }
             .padding()
@@ -133,8 +133,8 @@ struct EmptyApplicationsView: View {
     }
 }
 
-// MARK: - ApplicationsList
-struct ApplicationsList: View {
+// MARK: - JobApplicationsList
+struct JobApplicationsList: View {
     let applications: [JobApplicationResponse]
     @ObservedObject var viewModel: JobApplicationsViewModel
     
@@ -142,13 +142,13 @@ struct ApplicationsList: View {
         List {
             // 통계 섹션
             Section {
-                ApplicationStatsView(applications: applications)
+                JobApplicationsStatsView(applications: applications)
             }
             
             // 지원자 목록
             Section(header: Text("지원자 목록 (\(applications.count)명)")) {
                 ForEach(applications) { application in
-                    CompanyApplicationRow(application: application, viewModel: viewModel)
+                    JobApplicationsRow(application: application, viewModel: viewModel)
                 }
             }
         }
@@ -156,8 +156,8 @@ struct ApplicationsList: View {
     }
 }
 
-// MARK: - ApplicationStatsView
-struct ApplicationStatsView: View {
+// MARK: - JobApplicationsStatsView
+struct JobApplicationsStatsView: View {
     let applications: [JobApplicationResponse]
     
     private var stats: (pending: Int, reviewed: Int, accepted: Int, rejected: Int) {
@@ -176,17 +176,18 @@ struct ApplicationStatsView: View {
                 .fontWeight(.bold)
             
             HStack(spacing: 12) {
-                ApplicationStatCard(title: "대기", count: stats.pending, color: .blue)
-                ApplicationStatCard(title: "검토", count: stats.reviewed, color: .orange)
-                ApplicationStatCard(title: "합격", count: stats.accepted, color: .green)
-                ApplicationStatCard(title: "불합격", count: stats.rejected, color: .red)
+                JobApplicationsStatCard(title: "대기", count: stats.pending, color: .blue)
+                JobApplicationsStatCard(title: "검토", count: stats.reviewed, color: .orange)
+                JobApplicationsStatCard(title: "합격", count: stats.accepted, color: .green)
+                JobApplicationsStatCard(title: "불합격", count: stats.rejected, color: .red)
             }
         }
         .padding(.vertical, 8)
     }
 }
 
-struct ApplicationStatCard: View {
+// MARK: - JobApplicationsStatCard (고유한 이름)
+struct JobApplicationsStatCard: View {
     let title: String
     let count: Int
     let color: Color
@@ -209,8 +210,8 @@ struct ApplicationStatCard: View {
     }
 }
 
-// MARK: - CompanyApplicationRow
-struct CompanyApplicationRow: View {
+// MARK: - JobApplicationsRow (고유한 이름)
+struct JobApplicationsRow: View {
     let application: JobApplicationResponse
     @ObservedObject var viewModel: JobApplicationsViewModel
     @State private var showingDetailView = false
@@ -282,13 +283,13 @@ struct CompanyApplicationRow: View {
             .padding(.vertical, 4)
         }
         .sheet(isPresented: $showingDetailView) {
-            ApplicationDetailView(application: application, viewModel: viewModel)
+            JobApplicationDetailView(application: application, viewModel: viewModel)
         }
     }
 }
 
-// MARK: - ApplicationDetailView
-struct ApplicationDetailView: View {
+// MARK: - JobApplicationDetailView
+struct JobApplicationDetailView: View {
     let application: JobApplicationResponse
     @ObservedObject var viewModel: JobApplicationsViewModel
     @Environment(\.presentationMode) var presentationMode
@@ -324,7 +325,7 @@ struct ApplicationDetailView: View {
                         HStack {
                             Text("지원일:")
                                 .fontWeight(.medium)
-                            Text(application.applicationDate.toFormattedDate())
+                            Text(application.applicationDate.toJobApplicationFormattedDate())
                         }
                     }
                 }
@@ -431,8 +432,8 @@ class JobApplicationsViewModel: ObservableObject {
     }
 }
 
-// MARK: - CompanyTipRow
-struct CompanyTipRow: View {
+// MARK: - JobApplicationsTipRow (고유한 이름)
+struct JobApplicationsTipRow: View {
     let tip: String
     
     var body: some View {
@@ -447,5 +448,22 @@ struct CompanyTipRow: View {
                 .foregroundColor(.secondary)
                 .lineLimit(nil)
         }
+    }
+}
+
+// MARK: - Extensions
+extension String {
+    func toJobApplicationFormattedDate() -> String {
+        let inputFormatter = DateFormatter()
+        inputFormatter.dateFormat = "yyyy-MM-dd HH:mm"
+        
+        if let date = inputFormatter.date(from: self) {
+            let outputFormatter = DateFormatter()
+            outputFormatter.dateFormat = "yyyy년 M월 d일 HH:mm"
+            outputFormatter.locale = Locale(identifier: "ko_KR")
+            return outputFormatter.string(from: date)
+        }
+        
+        return self
     }
 }
