@@ -891,3 +891,212 @@ class APIService {
         }
     }
 }
+
+
+// APIService.swift에 추가할 기업용 메서드들 (수정된 버전)
+
+extension APIService {
+    
+    // MARK: - 기업용 채용공고 관리 API
+    
+    /// 내가 등록한 채용공고 목록 조회
+    func getMyJobPostings() async throws -> [JobPostingResponse] {
+        guard let token = authToken else {
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
+        }
+        
+        let url = URL(string: "\(baseURL)/job-posting/my")!
+        var request = URLRequest(url: url)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        print("🔵 내 채용공고 조회 요청: \(url.absoluteString)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpResponse = response as? HTTPURLResponse
+            
+            print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+            
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("🟢 응답 데이터: \(responseString)")
+            }
+            
+            guard let httpResponse = httpResponse else {
+                throw APIError.unknown
+            }
+            
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
+            }
+            
+            if httpResponse.statusCode == 403 {
+                throw APIError.forbidden("기업 회원만 접근할 수 있습니다.")
+            }
+            
+            if httpResponse.statusCode != 200 {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "알 수 없는 오류"
+                throw APIError.serverError("서버 오류 (\(httpResponse.statusCode)): \(errorMessage)")
+            }
+            
+            let jobPostings = try JSONDecoder().decode([JobPostingResponse].self, from: data)
+            print("🟢 내 채용공고 \(jobPostings.count)개 로드 완료")
+            
+            return jobPostings
+            
+        } catch {
+            print("🔴 내 채용공고 조회 오류: \(error)")
+            throw error
+        }
+    }
+    
+    /// 새 채용공고 등록
+    func createJobPosting(request: CompanyJobPostingRequest) async throws -> JobPostingResponse {
+        guard let token = authToken else {
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
+        }
+        
+        let url = URL(string: "\(baseURL)/job-posting")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let encoder = JSONEncoder()
+        urlRequest.httpBody = try encoder.encode(request)
+        
+        print("🔵 채용공고 등록 요청: \(url.absoluteString)")
+        print("🔵 요청 데이터: \(String(data: urlRequest.httpBody ?? Data(), encoding: .utf8) ?? "nil")")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            let httpResponse = response as? HTTPURLResponse
+            
+            print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+            
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("🟢 응답 데이터: \(responseString)")
+            }
+            
+            guard let httpResponse = httpResponse else {
+                throw APIError.unknown
+            }
+            
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
+            }
+            
+            if httpResponse.statusCode == 403 {
+                throw APIError.forbidden("기업 회원만 채용공고를 등록할 수 있습니다.")
+            }
+            
+            if httpResponse.statusCode != 200 {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "알 수 없는 오류"
+                throw APIError.serverError("서버 오류 (\(httpResponse.statusCode)): \(errorMessage)")
+            }
+            
+            let newJobPosting = try JSONDecoder().decode(JobPostingResponse.self, from: data)
+            print("🟢 채용공고 등록 완료: \(newJobPosting.title)")
+            
+            return newJobPosting
+            
+        } catch {
+            print("🔴 채용공고 등록 오류: \(error)")
+            throw error
+        }
+    }
+    
+    /// 채용공고 수정
+    func updateJobPosting(jobId: Int, request: CompanyJobPostingRequest) async throws -> JobPostingResponse {
+        guard let token = authToken else {
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
+        }
+        
+        let url = URL(string: "\(baseURL)/job-posting/\(jobId)")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "PUT"
+        urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let encoder = JSONEncoder()
+        urlRequest.httpBody = try encoder.encode(request)
+        
+        print("🔵 채용공고 수정 요청: \(url.absoluteString)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            let httpResponse = response as? HTTPURLResponse
+            
+            print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+            
+            guard let httpResponse = httpResponse else {
+                throw APIError.unknown
+            }
+            
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
+            }
+            
+            if httpResponse.statusCode == 403 {
+                throw APIError.forbidden("자신의 채용공고만 수정할 수 있습니다.")
+            }
+            
+            if httpResponse.statusCode != 200 {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "알 수 없는 오류"
+                throw APIError.serverError("서버 오류 (\(httpResponse.statusCode)): \(errorMessage)")
+            }
+            
+            let updatedJobPosting = try JSONDecoder().decode(JobPostingResponse.self, from: data)
+            print("🟢 채용공고 수정 완료: \(updatedJobPosting.title)")
+            
+            return updatedJobPosting
+            
+        } catch {
+            print("🔴 채용공고 수정 오류: \(error)")
+            throw error
+        }
+    }
+    
+    /// 채용공고 삭제
+    func deleteJobPosting(jobId: Int) async throws {
+        guard let token = authToken else {
+            throw APIError.unauthorized("인증이 필요합니다. 로그인해주세요.")
+        }
+        
+        let url = URL(string: "\(baseURL)/job-posting/\(jobId)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        print("🔵 채용공고 삭제 요청: \(url.absoluteString)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpResponse = response as? HTTPURLResponse
+            
+            print("🟢 응답 코드: \(httpResponse?.statusCode ?? 0)")
+            
+            guard let httpResponse = httpResponse else {
+                throw APIError.unknown
+            }
+            
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized("인증이 만료되었습니다. 다시 로그인해주세요.")
+            }
+            
+            if httpResponse.statusCode == 403 {
+                throw APIError.forbidden("자신의 채용공고만 삭제할 수 있습니다.")
+            }
+            
+            if httpResponse.statusCode != 200 {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "알 수 없는 오류"
+                throw APIError.serverError("서버 오류 (\(httpResponse.statusCode)): \(errorMessage)")
+            }
+            
+            print("🟢 채용공고 삭제 완료")
+            
+        } catch {
+            print("🔴 채용공고 삭제 오류: \(error)")
+            throw error
+        }
+    }
+}

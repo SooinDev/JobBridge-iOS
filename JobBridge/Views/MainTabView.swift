@@ -1,3 +1,4 @@
+// MARK: - 업데이트된 MainTabView.swift
 import SwiftUI
 
 struct MainTabView: View {
@@ -6,18 +7,31 @@ struct MainTabView: View {
     @StateObject private var jobViewModel = JobViewModel()
     @State private var selectedTab = 0
     
+    // 사용자 타입 확인
+    private var userType: String {
+        authViewModel.currentUser?.userType ?? "INDIVIDUAL"
+    }
+    
+    private var isCompany: Bool {
+        userType == "COMPANY"
+    }
+    
     var body: some View {
         TabView(selection: $selectedTab) {
-            // 홈 탭
+            // 홈 탭 (공통)
             NavigationView {
-                HomeView(jobViewModel: jobViewModel, resumeViewModel: resumeViewModel)
+                if isCompany {
+                    CompanyHomeView(jobViewModel: jobViewModel)
+                } else {
+                    HomeView(jobViewModel: jobViewModel, resumeViewModel: resumeViewModel)
+                }
             }
             .tabItem {
                 Label("홈", systemImage: "house.fill")
             }
             .tag(0)
             
-            // 채용공고 탭
+            // 채용공고 탭 (공통)
             NavigationView {
                 JobsView(viewModel: jobViewModel)
             }
@@ -26,111 +40,131 @@ struct MainTabView: View {
             }
             .tag(1)
             
-            // 해시태그 검색 탭 (버튼 방식으로 변경)
-            NavigationView {
-                HashtagFilterSearchView()
+            // 조건부 탭들
+            if isCompany {
+                // 기업용 탭들
+                NavigationView {
+                    CompanyJobManagementView()
+                }
+                .tabItem {
+                    Label("채용관리", systemImage: "person.3.sequence.fill")
+                }
+                .tag(2)
+                
+                NavigationView {
+                    CompanyResumeMatchingView()
+                }
+                .tabItem {
+                    Label("인재매칭", systemImage: "sparkles")
+                }
+                .tag(3)
+                
+                NavigationView {
+                    CompanyProfileView()
+                }
+                .tabItem {
+                    Label("내 정보", systemImage: "building.2.fill")
+                }
+                .tag(4)
+            } else {
+                // 개인용 탭들
+                NavigationView {
+                    HashtagFilterSearchView()
+                }
+                .tabItem {
+                    Label("해시태그", systemImage: "number")
+                }
+                .tag(2)
+                
+                NavigationView {
+                    ResumesView(viewModel: resumeViewModel)
+                }
+                .tabItem {
+                    Label("이력서", systemImage: "doc.text.fill")
+                }
+                .tag(3)
+                
+                NavigationView {
+                    MyApplicationsView()
+                }
+                .tabItem {
+                    Label("지원내역", systemImage: "paperplane.fill")
+                }
+                .tag(4)
+                
+                NavigationView {
+                    ProfileView()
+                }
+                .tabItem {
+                    Label("내 정보", systemImage: "person.fill")
+                }
+                .tag(5)
             }
-            .tabItem {
-                Label("해시태그", systemImage: "number")
-            }
-            .tag(2)
-            
-            // 이력서 탭
-            NavigationView {
-                ResumesView(viewModel: resumeViewModel)
-            }
-            .tabItem {
-                Label("이력서", systemImage: "doc.text.fill")
-            }
-            .tag(3)
-            
-            // 지원 내역 탭
-            NavigationView {
-                MyApplicationsView()
-            }
-            .tabItem {
-                Label("지원내역", systemImage: "paperplane.fill")
-            }
-            .tag(4)
-            
-            // 프로필 탭
-            NavigationView {
-                ProfileView()
-            }
-            .tabItem {
-                Label("내 정보", systemImage: "person.fill")
-            }
-            .tag(5)
         }
         .accentColor(AppTheme.primary)
         .onAppear {
-            // 탭 바 외관 설정
-            let appearance = UITabBarAppearance()
-            appearance.configureWithOpaqueBackground()
-            appearance.backgroundColor = UIColor.systemBackground
-            
-            // 선택/미선택 아이템 컬러 설정
-            let itemAppearance = UITabBarItemAppearance()
-            itemAppearance.normal.iconColor = UIColor.gray
-            itemAppearance.selected.iconColor = UIColor(AppTheme.primary)
-            
-            appearance.inlineLayoutAppearance = itemAppearance
-            appearance.stackedLayoutAppearance = itemAppearance
-            appearance.compactInlineLayoutAppearance = itemAppearance
+            setupTabBarAppearance()
+        }
+    }
+    
+    private func setupTabBarAppearance() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor.systemBackground
+        
+        let itemAppearance = UITabBarItemAppearance()
+        itemAppearance.normal.iconColor = UIColor.gray
+        itemAppearance.selected.iconColor = UIColor(AppTheme.primary)
+        
+        appearance.inlineLayoutAppearance = itemAppearance
+        appearance.stackedLayoutAppearance = itemAppearance
+        appearance.compactInlineLayoutAppearance = itemAppearance
 
-            UITabBar.appearance().standardAppearance = appearance
-            if #available(iOS 15.0, *) {
-                UITabBar.appearance().scrollEdgeAppearance = appearance
-            }
+        UITabBar.appearance().standardAppearance = appearance
+        if #available(iOS 15.0, *) {
+            UITabBar.appearance().scrollEdgeAppearance = appearance
         }
     }
 }
 
-// 홈 뷰에서 해시태그 빠른 선택 섹션 업데이트
-struct HomeView: View {
+// MARK: - CompanyHomeView (기업용 홈 화면)
+struct CompanyHomeView: View {
     @ObservedObject var jobViewModel: JobViewModel
-    @ObservedObject var resumeViewModel: ResumeViewModel
+    @EnvironmentObject var authViewModel: AuthViewModel
+    @StateObject private var companyJobViewModel = CompanyJobViewModel()
     @State private var isLoading = false
     
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                // 헤더 (사용자 환영 메시지)
-                WelcomeHeaderView()
+                // 기업 환영 헤더
+                CompanyWelcomeHeaderView()
                 
-                // 인기 해시태그 빠른 선택 섹션
-                PopularHashtagsSection()
+                // 빠른 액션 버튼들 (기업용)
+                CompanyQuickActionsView()
                 
-                // 빠른 액션 버튼들
-                QuickActionsView()
+                // 내 채용공고 현황
+                MyJobPostingsSection(viewModel: companyJobViewModel)
                 
-                // 추천 채용공고
-                RecommendedJobsSection(jobViewModel: jobViewModel)
-                
-                // 최근 지원 내역
+                // 최근 지원자 현황 (추후 구현)
                 RecentApplicationsSection()
                 
-                // 이력서 관리
-                ResumesSection(resumeViewModel: resumeViewModel)
+                // 인재 매칭 추천 (추후 구현)
+                RecommendedTalentsSection()
             }
             .padding()
         }
-        .navigationTitle("JobBridge")
+        .navigationTitle("기업 대시보드")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             isLoading = true
-            // 데이터 로드
+            
             Task {
+                // 기업 데이터 로드
                 await withTaskGroup(of: Void.self) { group in
                     group.addTask {
-                        if jobViewModel.jobs.isEmpty {
-                            await jobViewModel.loadRecentJobs()
-                        }
-                    }
-                    
-                    group.addTask {
-                        if resumeViewModel.resumes.isEmpty {
-                            await resumeViewModel.loadResumes()
+                        if companyJobViewModel.myJobPostings.isEmpty {
+                            await companyJobViewModel.loadMyJobPostings()
                         }
                     }
                 }
@@ -148,72 +182,8 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Popular Hashtags Section
-
-struct PopularHashtagsSection: View {
-    // 인기 해시태그 (홈 화면용 - 축약 버전) - snake.fill을 laptopcomputer로 변경
-    private let popularHashtags = [
-        HashtagItem(hashtag: "#Java", icon: "cup.and.saucer.fill", color: .orange),
-        HashtagItem(hashtag: "#Python", icon: "laptopcomputer", color: .green),
-        HashtagItem(hashtag: "#JavaScript", icon: "globe", color: .yellow),
-        HashtagItem(hashtag: "#Swift", icon: "swift", color: .blue),
-        HashtagItem(hashtag: "#React", icon: "atom", color: .cyan),
-        HashtagItem(hashtag: "#AI", icon: "brain.head.profile", color: .purple)
-    ]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("인기 해시태그")
-                    .heading3()
-                
-                Spacer()
-                
-                NavigationLink(destination: HashtagFilterSearchView()) {
-                    Text("전체 보기")
-                        .caption()
-                        .foregroundColor(AppTheme.primary)
-                }
-            }
-            
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 12) {
-                ForEach(popularHashtags, id: \.hashtag) { item in
-                    NavigationLink(destination: HashtagFilterSearchView(preselectedHashtag: item.hashtag)) {
-                        VStack(spacing: 8) {
-                            Image(systemName: item.icon)
-                                .font(.system(size: 24))
-                                .foregroundColor(.white)
-                                .frame(width: 50, height: 50)
-                                .background(item.color)
-                                .cornerRadius(12)
-                            
-                            Text(item.hashtag)
-                                .caption()
-                                .foregroundColor(AppTheme.textPrimary)
-                        }
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(AppTheme.secondaryBackground)
-        .cornerRadius(12)
-    }
-}
-
-// MARK: - Hashtag Item Model
-
-struct HashtagItem {
-    let hashtag: String
-    let icon: String
-    let color: Color
-}
-
-struct WelcomeHeaderView: View {
+// MARK: - CompanyWelcomeHeaderView
+struct CompanyWelcomeHeaderView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     
     var body: some View {
@@ -221,42 +191,43 @@ struct WelcomeHeaderView: View {
             Text("안녕하세요!")
                 .heading2()
             
-            Text("\(authViewModel.currentUser?.name ?? "회원")님")
+            Text("\(authViewModel.currentUser?.name ?? "기업")님")
                 .heading1()
                 .foregroundColor(AppTheme.primary)
             
-            Text("해시태그로 원하는 채용공고를 쉽게 찾아보세요!")
+            Text("우수한 인재를 찾고 채용공고를 효율적으로 관리하세요!")
                 .body2()
         }
         .padding(.vertical, 8)
     }
 }
 
-struct QuickActionsView: View {
+// MARK: - CompanyQuickActionsView
+struct CompanyQuickActionsView: View {
     var body: some View {
         HStack(spacing: 12) {
-            QuickActionButton(
-                icon: "doc.text.magnifyingglass",
-                title: "이력서 작성",
-                destination: AnyView(AddResumeView(viewModel: ResumeViewModel()))
+            CompanyQuickActionButton(
+                icon: "plus.circle.fill",
+                title: "채용공고 등록",
+                destination: AnyView(CreateJobPostingView(viewModel: CompanyJobViewModel()))
             )
             
-            QuickActionButton(
-                icon: "number",
-                title: "해시태그 검색",
-                destination: AnyView(HashtagFilterSearchView())
+            CompanyQuickActionButton(
+                icon: "person.3.sequence.fill",
+                title: "채용공고 관리",
+                destination: AnyView(CompanyJobManagementView())
             )
             
-            QuickActionButton(
-                icon: "briefcase.fill",
-                title: "전체 공고",
-                destination: AnyView(JobsView(viewModel: JobViewModel()))
+            CompanyQuickActionButton(
+                icon: "sparkles",
+                title: "인재 매칭",
+                destination: AnyView(CompanyResumeMatchingView())
             )
         }
     }
 }
 
-struct QuickActionButton<Destination: View>: View {
+struct CompanyQuickActionButton<Destination: View>: View {
     let icon: String
     let title: String
     let destination: Destination
@@ -277,136 +248,23 @@ struct QuickActionButton<Destination: View>: View {
             }
             .frame(maxWidth: .infinity)
         }
-    }
-}
-
-struct RecommendedJobsSection: View {
-    @ObservedObject var jobViewModel: JobViewModel
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("추천 채용공고")
-                    .heading3()
-                
-                Spacer()
-                
-                NavigationLink(destination: JobsView(viewModel: JobViewModel())) {
-                    Text("모두 보기")
-                        .caption()
-                        .foregroundColor(AppTheme.primary)
-                }
-            }
-            
-            if jobViewModel.isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
-            } else if jobViewModel.jobs.isEmpty {
-                EmptyStateView(
-                    icon: "briefcase",
-                    title: "추천 공고 없음",
-                    message: "맞춤 채용공고를 준비 중입니다.",
-                    buttonTitle: "해시태그로 검색",
-                    buttonAction: nil
-                )
-                .frame(height: 200)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
-                        ForEach(jobViewModel.jobs.prefix(5)) { job in
-                            NavigationLink(destination: JobDetailView(job: job)) {
-                                JobCardView(job: job)
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Job Card View
-
-struct JobCardView: View {
-    let job: JobPostingResponse
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(job.title)
-                .heading3()
-                .lineLimit(1)
-            
-            Text(job.companyName ?? "기업명 없음")
-                .body2()
-            
-            Divider()
-            
-            HStack {
-                Text(job.location)
-                    .caption()
-                
-                Spacer()
-                
-                Text(job.experienceLevel)
-                    .caption()
-            }
-            
-            // 스킬 태그 미리보기
-            if !job.requiredSkills.isEmpty {
-                let skills = job.requiredSkills.components(separatedBy: ",")
-                    .prefix(2)
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                
-                HStack {
-                    ForEach(skills, id: \.self) { skill in
-                        Text(skill.hasPrefix("#") ? skill : "#\(skill)")
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(AppTheme.primary.opacity(0.1))
-                            .foregroundColor(AppTheme.primary)
-                            .cornerRadius(8)
-                    }
-                    Spacer()
-                }
-            }
-            
-            if let matchRate = job.matchRate {
-                HStack {
-                    Spacer()
-                    Text("일치도: \(Int(matchRate * 100))%")
-                        .caption()
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.green.opacity(0.2))
-                        .foregroundColor(.green)
-                        .cornerRadius(20)
-                }
-            }
-        }
-        .padding()
-        .frame(width: 280, height: 200)
-        .background(AppTheme.secondaryBackground)
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
         .foregroundColor(AppTheme.textPrimary)
     }
 }
 
-struct RecentApplicationsSection: View {
-    @StateObject private var viewModel = ApplicationViewModel()
+// MARK: - MyJobPostingsSection
+struct MyJobPostingsSection: View {
+    @ObservedObject var viewModel: CompanyJobViewModel
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("최근 지원 내역")
+                Text("내 채용공고")
                     .heading3()
                 
                 Spacer()
                 
-                NavigationLink(destination: MyApplicationsView()) {
+                NavigationLink(destination: CompanyJobManagementView()) {
                     Text("모두 보기")
                         .caption()
                         .foregroundColor(AppTheme.primary)
@@ -417,183 +275,332 @@ struct RecentApplicationsSection: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding()
-            } else if let errorMessage = viewModel.errorMessage {
-                ErrorView(
-                    message: errorMessage,
-                    retryAction: { viewModel.loadMyApplications() }
-                )
-                .frame(height: 150)
-            } else if viewModel.applications.isEmpty {
+            } else if viewModel.myJobPostings.isEmpty {
                 EmptyStateView(
-                    icon: "paperplane",
-                    title: "지원 내역 없음",
-                    message: "해시태그로 관심 공고를 찾아 지원해보세요.",
-                    buttonTitle: "해시태그 검색",
+                    icon: "briefcase.badge.plus",
+                    title: "등록된 채용공고 없음",
+                    message: "첫 번째 채용공고를 등록해보세요.",
+                    buttonTitle: "채용공고 등록하기",
                     buttonAction: nil
                 )
-                .frame(height: 150)
+                .frame(height: 200)
             } else {
                 VStack(spacing: 12) {
-                    ForEach(viewModel.applications.prefix(3)) { application in
-                        NavigationLink(destination: JobDetailView(jobId: application.jobPostingId)) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(application.jobTitle)
-                                        .body1()
-                                        .lineLimit(1)
-                                    
-                                    Text(application.companyName)
-                                        .body2()
-                                        .lineLimit(1)
-                                }
-                                
-                                Spacer()
-                                
-                                VStack(alignment: .trailing, spacing: 4) {
-                                    Text("지원 완료")
-                                        .caption()
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.green.opacity(0.2))
-                                        .foregroundColor(.green)
-                                        .cornerRadius(20)
-                                    
-                                    Text(formatDate(application.appliedAt))
-                                        .caption()
-                                        .foregroundColor(AppTheme.textTertiary)
-                                }
+                    // 통계 요약
+                    HStack(spacing: 16) {
+                        CompanyStatCard(
+                            title: "총 공고",
+                            value: "\(viewModel.myJobPostings.count)",
+                            color: .blue
+                        )
+                        
+                        CompanyStatCard(
+                            title: "진행중",
+                            value: "\(getActiveJobsCount())",
+                            color: .green
+                        )
+                        
+                        CompanyStatCard(
+                            title: "지원자",
+                            value: "\(viewModel.totalApplications)",
+                            color: .orange
+                        )
+                    }
+                    
+                    // 최근 공고 미리보기
+                    VStack(spacing: 8) {
+                        ForEach(viewModel.myJobPostings.prefix(3)) { job in
+                            NavigationLink(destination: CompanyJobDetailView(job: job, viewModel: viewModel)) {
+                                CompanyJobPreviewRow(job: job)
                             }
-                            .padding()
-                            .background(AppTheme.secondaryBackground)
-                            .cornerRadius(12)
-                            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                            .foregroundColor(AppTheme.textPrimary)
                         }
-                        .foregroundColor(AppTheme.textPrimary)
                     }
                 }
             }
         }
         .onAppear {
-            viewModel.loadMyApplications()
+            if viewModel.myJobPostings.isEmpty {
+                viewModel.loadMyJobPostings()
+            }
         }
     }
     
-    private func formatDate(_ dateString: String) -> String {
-        let formatters: [DateFormatter] = [
-            {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-                return formatter
-            }(),
-            {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd HH:mm"
-                return formatter
-            }(),
-            {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd"
-                return formatter
-            }()
-        ]
-        
-        for formatter in formatters {
-            if let date = formatter.date(from: dateString) {
-                let outputFormatter = DateFormatter()
-                outputFormatter.dateFormat = "yyyy년 M월 d일"
-                outputFormatter.locale = Locale(identifier: "ko_KR")
-                return outputFormatter.string(from: date)
-            }
-        }
-        
-        return dateString
+    private func getActiveJobsCount() -> Int {
+        viewModel.myJobPostings.filter { job in
+            guard let deadline = job.deadline else { return true }
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd HH:mm"
+            guard let deadlineDate = formatter.date(from: deadline) else { return true }
+            return deadlineDate >= Date()
+        }.count
     }
 }
 
-struct ResumesSection: View {
-    @ObservedObject var resumeViewModel: ResumeViewModel
+// MARK: - CompanyStatCard
+struct CompanyStatCard: View {
+    let title: String
+    let value: String
+    let color: Color
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("내 이력서")
-                    .heading3()
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(color)
+            
+            Text(title)
+                .font(.caption)
+                .foregroundColor(AppTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(color.opacity(0.1))
+        .cornerRadius(8)
+    }
+}
+
+// MARK: - CompanyJobPreviewRow
+struct CompanyJobPreviewRow: View {
+    let job: JobPostingResponse
+    
+    private var statusColor: Color {
+        guard let deadline = job.deadline else { return .green }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        guard let deadlineDate = formatter.date(from: deadline) else { return .green }
+        
+        if deadlineDate < Date() {
+            return .red
+        } else {
+            let daysLeft = Calendar.current.dateComponents([.day], from: Date(), to: deadlineDate).day ?? 0
+            return daysLeft <= 3 ? .orange : .green
+        }
+    }
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(job.title)
+                    .body1()
+                    .lineLimit(1)
                 
-                Spacer()
-                
-                NavigationLink(destination: ResumesView(viewModel: resumeViewModel)) {
-                    Text("모두 보기")
+                HStack {
+                    Text(job.location)
                         .caption()
-                        .foregroundColor(AppTheme.primary)
+                        .foregroundColor(AppTheme.textSecondary)
+                    
+                    Text("•")
+                        .caption()
+                        .foregroundColor(AppTheme.textSecondary)
+                    
+                    Text(job.experienceLevel)
+                        .caption()
+                        .foregroundColor(AppTheme.textSecondary)
                 }
             }
             
-            if resumeViewModel.isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
-            } else if resumeViewModel.resumes.isEmpty {
-                EmptyStateView(
-                    icon: "doc.text",
-                    title: "이력서 없음",
-                    message: "이력서를 작성하고 해시태그로 맞춤 공고를 찾아보세요.",
-                    buttonTitle: "이력서 작성하기",
-                    buttonAction: nil
-                )
-                .frame(height: 150)
-            } else {
-                VStack(spacing: 12) {
-                    ForEach(resumeViewModel.resumes.prefix(2)) { resume in
-                        NavigationLink(destination: ResumeDetailView(resume: resume)) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text(resume.title)
-                                        .body1()
-                                        .lineLimit(1)
-                                    
-                                    HStack {
-                                        Image(systemName: "calendar")
-                                            .font(.caption)
-                                        
-                                        Text(formatDate(resume.createdAt))
-                                            .caption()
-                                    }
-                                    .foregroundColor(AppTheme.textTertiary)
-                                }
-                                
-                                Spacer()
-                                
-                                Image(systemName: "chevron.right")
-                                    .foregroundColor(AppTheme.textTertiary)
-                            }
-                            .padding()
-                            .background(AppTheme.secondaryBackground)
-                            .cornerRadius(12)
-                            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-                        }
-                        .foregroundColor(AppTheme.textPrimary)
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 4) {
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 8, height: 8)
+                
+                Text(job.createdAt.toShortDate())
+                    .caption()
+                    .foregroundColor(AppTheme.textTertiary)
+            }
+        }
+        .padding()
+        .background(AppTheme.secondaryBackground)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+}
+
+// MARK: - CompanyResumeMatchingView (추후 구현)
+struct CompanyResumeMatchingView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 60))
+                .foregroundColor(.purple)
+            
+            Text("AI 인재 매칭")
+                .font(.title2)
+                .fontWeight(.bold)
+            
+            Text("이 기능은 곧 출시될 예정입니다.\nAI 기반 인재 매칭 시스템을 준비 중입니다.")
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+        }
+        .padding()
+        .navigationTitle("인재 매칭")
+    }
+}
+
+// MARK: - CompanyProfileView (기업용 프로필)
+struct CompanyProfileView: View {
+    @EnvironmentObject var authViewModel: AuthViewModel
+    @State private var showingLogoutAlert = false
+    
+    var body: some View {
+        Form {
+            // 기업 정보 섹션
+            Section(header: Text("기업 정보")) {
+                HStack {
+                    Image(systemName: "building.2.circle.fill")
+                        .resizable()
+                        .frame(width: 60, height: 60)
+                        .foregroundColor(.blue)
+                        .padding(.trailing, 10)
+                    
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(authViewModel.currentUser?.name ?? "기업")
+                            .font(.headline)
+                        
+                        Text(authViewModel.currentUser?.email ?? "")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Text("기업 회원")
+                            .font(.caption)
+                            .padding(5)
+                            .background(Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(5)
+                    }
+                }
+                .padding(.vertical, 5)
+            }
+            
+            // 채용 관리 섹션
+            Section(header: Text("채용 관리")) {
+                NavigationLink(destination: CompanyJobManagementView()) {
+                    HStack {
+                        Image(systemName: "briefcase.fill")
+                            .foregroundColor(.blue)
+                        Text("채용공고 관리")
+                    }
+                }
+                
+                NavigationLink(destination: CompanyResumeMatchingView()) {
+                    HStack {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(.purple)
+                        Text("인재 매칭")
+                    }
+                }
+            }
+            
+            // 앱 정보 섹션
+            Section(header: Text("앱 정보")) {
+                HStack {
+                    Text("버전")
+                    Spacer()
+                    Text("1.0.0")
+                        .foregroundColor(.secondary)
+                }
+                
+                Link(destination: URL(string: "https://yourapp.com/privacy")!) {
+                    HStack {
+                        Text("개인정보 처리방침")
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption)
+                    }
+                }
+                
+                Link(destination: URL(string: "https://yourapp.com/terms")!) {
+                    HStack {
+                        Text("이용약관")
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption)
+                    }
+                }
+            }
+            
+            // 로그아웃 섹션
+            Section {
+                Button(action: {
+                    showingLogoutAlert = true
+                }) {
+                    HStack {
+                        Spacer()
+                        Text("로그아웃")
+                            .foregroundColor(.red)
+                        Spacer()
                     }
                 }
             }
         }
-    }
-    
-    private func formatDate(_ dateString: String) -> String {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm"
-        
-        if let date = dateFormatter.date(from: dateString) {
-            dateFormatter.dateFormat = "yyyy년 MM월 dd일"
-            return dateFormatter.string(from: date)
+        .navigationTitle("기업 프로필")
+        .alert(isPresented: $showingLogoutAlert) {
+            Alert(
+                title: Text("로그아웃"),
+                message: Text("정말 로그아웃 하시겠습니까?"),
+                primaryButton: .destructive(Text("로그아웃")) {
+                    authViewModel.logout()
+                },
+                secondaryButton: .cancel(Text("취소"))
+            )
         }
-        
-        return dateString
     }
 }
 
-struct MainTabView_Previews: PreviewProvider {
-    static var previews: some View {
-        MainTabView()
-            .environmentObject(AuthViewModel())
+// MARK: - 추후 구현할 섹션들
+struct RecentApplicationsSection: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("최근 지원자")
+                    .heading3()
+                
+                Spacer()
+                
+                Text("모두 보기")
+                    .caption()
+                    .foregroundColor(AppTheme.primary)
+            }
+            
+            EmptyStateView(
+                icon: "person.3.sequence.fill",
+                title: "지원자 관리",
+                message: "지원자 관리 기능을 준비 중입니다.",
+                buttonTitle: nil,
+                buttonAction: nil
+            )
+            .frame(height: 150)
+        }
+    }
+}
+
+struct RecommendedTalentsSection: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("추천 인재")
+                    .heading3()
+                
+                Spacer()
+                
+                Text("모두 보기")
+                    .caption()
+                    .foregroundColor(AppTheme.primary)
+            }
+            
+            EmptyStateView(
+                icon: "sparkles",
+                title: "AI 인재 추천",
+                message: "AI 기반 인재 추천 기능을 준비 중입니다.",
+                buttonTitle: nil,
+                buttonAction: nil
+            )
+            .frame(height: 150)
+        }
     }
 }
