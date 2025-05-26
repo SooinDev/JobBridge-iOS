@@ -61,6 +61,24 @@ struct HomeView: View {
     }
 }
 
+struct QuickActionsView: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            QuickActionButton(
+                icon: "doc.text.fill",
+                title: "이력서 작성",
+                destination: AnyView(ResumesView(viewModel: ResumeViewModel()))
+            )
+
+            QuickActionButton(
+                icon: "magnifyingglass",
+                title: "채용공고 검색",
+                destination: AnyView(JobsView(viewModel: JobViewModel()))
+            )
+        }
+    }
+}
+
 // MARK: - WelcomeHeaderView
 struct WelcomeHeaderView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -81,54 +99,23 @@ struct WelcomeHeaderView: View {
     }
 }
 
-// MARK: - QuickActionsView
-struct QuickActionsView: View {
-    var body: some View {
-        HStack(spacing: 12) {
-            QuickActionButton(
-                icon: "doc.text.fill",
-                title: "이력서 작성",
-                destination: AnyView(ResumesView(viewModel: ResumeViewModel()))
-            )
-            
-            QuickActionButton(
-                icon: "magnifyingglass",
-                title: "채용공고 검색",
-                destination: AnyView(JobsView(viewModel: JobViewModel()))
-            )
-            
-            QuickActionButton(
-                icon: "number",
-                title: "해시태그 검색",
-                destination: AnyView(HashtagFilterSearchView())
-            )
-            
-            QuickActionButton(
-                icon: "paperplane.fill",
-                title: "지원 내역",
-                destination: AnyView(MyApplicationsView())
-            )
-        }
-    }
-}
-
-struct QuickActionButton<Destination: View>: View {
+struct QuickActionButton: View {
     let icon: String
     let title: String
-    let destination: Destination
-    
+    let destination: AnyView
+
     var body: some View {
         NavigationLink(destination: destination) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 20))
+                    .font(.system(size: 24))
                     .foregroundColor(.white)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 50, height: 50)
                     .background(AppTheme.primary)
-                    .cornerRadius(8)
-                
+                    .cornerRadius(10)
+
                 Text(title)
-                    .caption()
+                    .font(.caption)
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)

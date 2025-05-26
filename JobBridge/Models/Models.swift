@@ -343,3 +343,72 @@ enum ApplicationFilter: String, CaseIterable {
         }
     }
 }
+
+struct ResumeMatchResponse: Codable, Identifiable {
+    let id: Int
+    let title: String
+    let content: String
+    let userName: String
+    let createdAt: String
+    let updatedAt: String
+    let matchRate: Double
+
+    var formattedCreatedDate: String {
+        return createdAt.toFormattedDate()
+    }
+
+    var matchRatePercentage: Int {
+        return Int(matchRate * 100)
+    }
+
+    var matchRateDescription: String {
+        switch matchRate {
+        case 0.9...1.0: return "완벽 매치"
+        case 0.8..<0.9: return "높은 적합도"
+        case 0.7..<0.8: return "양호한 적합도"
+        case 0.6..<0.7: return "기본 적합도"
+        default: return "낮은 적합도"
+        }
+    }
+
+    var matchRateColor: Color {
+        switch matchRate {
+        case 0.9...1.0: return .red
+        case 0.8..<0.9: return .green
+        case 0.7..<0.8: return .orange
+        case 0.6..<0.7: return .blue
+        default: return .gray
+        }
+    }
+    
+    var contentSummary: String {
+        return String(content.prefix(100)) + (content.count > 100 ? "..." : "")
+    }
+
+    var extractedSkills: [String] {
+        let skillKeywords = [
+            "Swift", "iOS", "Android", "React", "Python", "Java", "JavaScript",
+            "SwiftUI", "UIKit", "Kotlin", "Flutter", "Node.js", "TypeScript",
+            "Vue.js", "Angular", "C++", "C#", "PHP", "Ruby", "Go", "Rust",
+            "HTML", "CSS", "SQL", "MongoDB", "MySQL", "PostgreSQL", "Redis",
+            "AWS", "Docker", "Kubernetes", "Git", "Jenkins", "Firebase"
+        ]
+        
+        return skillKeywords.filter { content.localizedCaseInsensitiveContains($0) }
+    }
+
+    var estimatedExperienceLevel: String {
+        let lower = content.lowercased()
+        if lower.contains("신입") || lower.contains("졸업") || lower.contains("인턴") {
+            return "신입"
+        } else if lower.contains("1년") || lower.contains("2년") {
+            return "주니어"
+        } else if lower.contains("3년") || lower.contains("4년") || lower.contains("5년") {
+            return "미들"
+        } else if lower.contains("10년") || lower.contains("리드") || lower.contains("시니어") {
+            return "시니어"
+        } else {
+            return "경력무관"
+        }
+    }
+}

@@ -21,7 +21,7 @@ struct MainTabView: View {
             // 홈 탭 (공통)
             NavigationView {
                 if isCompany {
-                    CompanyHomeView(jobViewModel: jobViewModel)
+                    CompanyHomeView()
                 } else {
                     HomeView(jobViewModel: jobViewModel, resumeViewModel: resumeViewModel)
                 }
@@ -127,61 +127,6 @@ struct MainTabView: View {
     }
 }
 
-// MARK: - CompanyHomeView (기업용 홈 화면)
-struct CompanyHomeView: View {
-    @ObservedObject var jobViewModel: JobViewModel
-    @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var companyJobViewModel = CompanyJobViewModel()
-    @State private var isLoading = false
-    
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // 기업 환영 헤더
-                CompanyWelcomeHeaderView()
-                
-                // 빠른 액션 버튼들 (기업용)
-                CompanyQuickActionsView()
-                
-                // 내 채용공고 현황
-                MyJobPostingsSection(viewModel: companyJobViewModel)
-                
-                // 최근 지원자 현황 (추후 구현)
-                RecentApplicationsSection()
-                
-                // 인재 매칭 추천 (추후 구현)
-                RecommendedTalentsSection()
-            }
-            .padding()
-        }
-        .navigationTitle("기업 대시보드")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            isLoading = true
-            
-            Task {
-                // 기업 데이터 로드
-                await withTaskGroup(of: Void.self) { group in
-                    group.addTask {
-                        if companyJobViewModel.myJobPostings.isEmpty {
-                            await companyJobViewModel.loadMyJobPostings()
-                        }
-                    }
-                }
-                
-                DispatchQueue.main.async {
-                    isLoading = false
-                }
-            }
-        }
-        .overlay {
-            if isLoading {
-                LoadingView(message: "데이터를 불러오는 중...")
-            }
-        }
-    }
-}
-
 // MARK: - CompanyWelcomeHeaderView
 struct CompanyWelcomeHeaderView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -199,31 +144,6 @@ struct CompanyWelcomeHeaderView: View {
                 .body2()
         }
         .padding(.vertical, 8)
-    }
-}
-
-// MARK: - CompanyQuickActionsView
-struct CompanyQuickActionsView: View {
-    var body: some View {
-        HStack(spacing: 12) {
-            CompanyQuickActionButton(
-                icon: "plus.circle.fill",
-                title: "채용공고 등록",
-                destination: AnyView(CreateJobPostingView(viewModel: CompanyJobViewModel()))
-            )
-            
-            CompanyQuickActionButton(
-                icon: "person.3.sequence.fill",
-                title: "채용공고 관리",
-                destination: AnyView(CompanyJobManagementView())
-            )
-            
-            CompanyQuickActionButton(
-                icon: "sparkles",
-                title: "인재 매칭",
-                destination: AnyView(CompanyResumeMatchingView())
-            )
-        }
     }
 }
 
@@ -417,138 +337,6 @@ struct CompanyJobPreviewRow: View {
         .background(AppTheme.secondaryBackground)
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-    }
-}
-
-// MARK: - CompanyResumeMatchingView (추후 구현)
-struct CompanyResumeMatchingView: View {
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 60))
-                .foregroundColor(.purple)
-            
-            Text("AI 인재 매칭")
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            Text("이 기능은 곧 출시될 예정입니다.\nAI 기반 인재 매칭 시스템을 준비 중입니다.")
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
-        }
-        .padding()
-        .navigationTitle("인재 매칭")
-    }
-}
-
-// MARK: - CompanyProfileView (기업용 프로필)
-struct CompanyProfileView: View {
-    @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var showingLogoutAlert = false
-    
-    var body: some View {
-        Form {
-            // 기업 정보 섹션
-            Section(header: Text("기업 정보")) {
-                HStack {
-                    Image(systemName: "building.2.circle.fill")
-                        .resizable()
-                        .frame(width: 60, height: 60)
-                        .foregroundColor(.blue)
-                        .padding(.trailing, 10)
-                    
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(authViewModel.currentUser?.name ?? "기업")
-                            .font(.headline)
-                        
-                        Text(authViewModel.currentUser?.email ?? "")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        Text("기업 회원")
-                            .font(.caption)
-                            .padding(5)
-                            .background(Color.green)
-                            .foregroundColor(.white)
-                            .cornerRadius(5)
-                    }
-                }
-                .padding(.vertical, 5)
-            }
-            
-            // 채용 관리 섹션
-            Section(header: Text("채용 관리")) {
-                NavigationLink(destination: CompanyJobManagementView()) {
-                    HStack {
-                        Image(systemName: "briefcase.fill")
-                            .foregroundColor(.blue)
-                        Text("채용공고 관리")
-                    }
-                }
-                
-                NavigationLink(destination: CompanyResumeMatchingView()) {
-                    HStack {
-                        Image(systemName: "sparkles")
-                            .foregroundColor(.purple)
-                        Text("인재 매칭")
-                    }
-                }
-            }
-            
-            // 앱 정보 섹션
-            Section(header: Text("앱 정보")) {
-                HStack {
-                    Text("버전")
-                    Spacer()
-                    Text("1.0.0")
-                        .foregroundColor(.secondary)
-                }
-                
-                Link(destination: URL(string: "https://yourapp.com/privacy")!) {
-                    HStack {
-                        Text("개인정보 처리방침")
-                        Spacer()
-                        Image(systemName: "arrow.up.right")
-                            .font(.caption)
-                    }
-                }
-                
-                Link(destination: URL(string: "https://yourapp.com/terms")!) {
-                    HStack {
-                        Text("이용약관")
-                        Spacer()
-                        Image(systemName: "arrow.up.right")
-                            .font(.caption)
-                    }
-                }
-            }
-            
-            // 로그아웃 섹션
-            Section {
-                Button(action: {
-                    showingLogoutAlert = true
-                }) {
-                    HStack {
-                        Spacer()
-                        Text("로그아웃")
-                            .foregroundColor(.red)
-                        Spacer()
-                    }
-                }
-            }
-        }
-        .navigationTitle("기업 프로필")
-        .alert(isPresented: $showingLogoutAlert) {
-            Alert(
-                title: Text("로그아웃"),
-                message: Text("정말 로그아웃 하시겠습니까?"),
-                primaryButton: .destructive(Text("로그아웃")) {
-                    authViewModel.logout()
-                },
-                secondaryButton: .cancel(Text("취소"))
-            )
-        }
     }
 }
 

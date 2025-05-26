@@ -387,10 +387,10 @@ struct EmptyApplicationsView: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        CompanyTipRow(tip: "채용공고 제목을 구체적으로 작성하세요")
-                        CompanyTipRow(tip: "요구 기술을 명확히 명시하세요")
-                        CompanyTipRow(tip: "급여 정보를 투명하게 공개하세요")
-                        CompanyTipRow(tip: "회사 문화와 복지를 어필하세요")
+                        CompanyTipRow(tip: CompanyTip(icon: "list.bullet", title: "공고 제목", description: "채용공고 제목을 구체적으로 작성하세요", color: .blue))
+                        CompanyTipRow(tip: CompanyTip(icon: "hammer.fill", title: "요구 기술", description: "요구 기술을 명확히 명시하세요", color: .purple))
+                        CompanyTipRow(tip: CompanyTip(icon: "dollarsign.circle.fill", title: "급여 정보", description: "급여 정보를 투명하게 공개하세요", color: .green))
+                        CompanyTipRow(tip: CompanyTip(icon: "heart.text.square.fill", title: "회사 복지", description: "회사 문화와 복지를 어필하세요", color: .orange))
                     }
                 }
                 .padding()
@@ -404,24 +404,5 @@ struct EmptyApplicationsView: View {
             }
         }
         .padding()
-    }
-}
-
-// MARK: - 팁 행
-struct CompanyTipRow: View {
-    let tip: String
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Circle()
-                .fill(Color.yellow)
-                .frame(width: 4, height: 4)
-                .padding(.top, 6)
-            
-            Text(tip)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .lineLimit(nil)
-        }
     }
 }

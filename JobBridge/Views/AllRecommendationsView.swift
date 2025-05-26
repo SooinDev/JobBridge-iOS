@@ -398,28 +398,6 @@ struct DetailedMatchingJobCard: View {
     }
 }
 
-struct InfoChip: View {
-    let icon: String
-    let text: String
-    let color: Color
-    
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.caption2)
-                .foregroundColor(color)
-            
-            Text(text)
-                .font(.caption)
-                .foregroundColor(.primary)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(color.opacity(0.1))
-        .cornerRadius(8)
-    }
-}
-
 // MARK: - AI 추천 팁
 struct AIRecommendationTipsView: View {
     var body: some View {
