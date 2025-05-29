@@ -33,7 +33,7 @@ class JobViewModel: ObservableObject {
     }
     
     // MARK: - ✅ 새로 추가: 모든 채용공고 로드
-    func loadAllJobs(page: Int = 0, size: Int = 100) {
+    func loadAllJobs(page: Int = 0, size: Int = 1000) {
         isLoading = true
         errorMessage = nil
         
