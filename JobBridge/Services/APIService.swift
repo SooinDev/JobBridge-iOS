@@ -301,7 +301,8 @@ struct TalentMatchResponse: Codable, Identifiable {
 class APIService {
     static let shared = APIService()
     
-    internal let baseURL = "http://192.168.219.100:8080/api"
+    // ip 하드코딩
+    internal let baseURL = "http://192.168.219.103:8080/api"
     
     private lazy var urlSession: URLSession = {
         let configuration = URLSessionConfiguration.default
